@@ -60,12 +60,6 @@
       letter-spacing:0.5px; transition:opacity 0.2s;
     ">Sign In</button>
 
-    <div style="text-align:center; margin-top:14px;">
-      <span onclick="showForgotPassword()" style="font-size:12px; color:var(--app-muted); cursor:pointer; text-decoration:underline; text-underline-offset:3px;">
-        Forgot your password?
-      </span>
-    </div>
-
     <div style="display:flex; align-items:center; gap:12px; margin:20px 0;">
       <div style="flex:1; height:1px; background:rgba(255,255,255,0.08);"></div>
       <span style="font-size:12px; color:var(--app-muted);">or</span>
@@ -140,26 +134,9 @@
       <label style="font-size:12px; font-family:var(--ff-mono); color:var(--app-muted);">EMAIL</label>
       <input id="regEmail" type="email" placeholder="you@example.com" style="width:100%;margin-top:6px;padding:10px 14px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--app-text);font-size:14px;outline:none;box-sizing:border-box;">
     </div>
-    <div style="margin-bottom:16px;">
-      <label style="font-size:12px; font-family:var(--ff-mono); color:var(--app-muted);">PASSWORD</label>
-      <input id="regPw" type="password" placeholder="Min. 8 characters" oninput="checkPasswordStrength(this.value)"
-        style="width:100%;margin-top:6px;padding:10px 14px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--app-text);font-size:14px;outline:none;box-sizing:border-box;">
-      <!-- Strength bar -->
-      <div style="margin-top:8px;">
-        <div style="display:flex;gap:4px;margin-bottom:5px;">
-          <div id="sbar1" style="flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,0.1);transition:background 0.3s"></div>
-          <div id="sbar2" style="flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,0.1);transition:background 0.3s"></div>
-          <div id="sbar3" style="flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,0.1);transition:background 0.3s"></div>
-          <div id="sbar4" style="flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,0.1);transition:background 0.3s"></div>
-        </div>
-        <div id="strengthLabel" style="font-size:11px;color:var(--app-muted);font-family:var(--ff-mono)"></div>
-      </div>
-    </div>
     <div style="margin-bottom:24px;">
-      <label style="font-size:12px; font-family:var(--ff-mono); color:var(--app-muted);">CONFIRM PASSWORD</label>
-      <input id="regPwConfirm" type="password" placeholder="Re-enter password" oninput="checkPasswordMatch()"
-        style="width:100%;margin-top:6px;padding:10px 14px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--app-text);font-size:14px;outline:none;box-sizing:border-box;">
-      <div id="matchLabel" style="font-size:11px;margin-top:5px;font-family:var(--ff-mono)"></div>
+      <label style="font-size:12px; font-family:var(--ff-mono); color:var(--app-muted);">PASSWORD</label>
+      <input id="regPw" type="password" placeholder="Min. 8 characters" style="width:100%;margin-top:6px;padding:10px 14px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--app-text);font-size:14px;outline:none;box-sizing:border-box;">
     </div>
 
     <button id="registerBtn" onclick="doRegister()" style="
@@ -353,41 +330,6 @@
 </div>
 
 <!-- SCRIPTS -->
-<!-- FORGOT PASSWORD MODAL -->
-<div id="forgotScreen" style="
-  display:none; position:fixed; inset:0; z-index:9999;
-  align-items:center; justify-content:center; padding:20px;
-  background:rgba(0,0,0,0.85); backdrop-filter:blur(8px);
-">
-  <div style="
-    background:#161b22; border:1px solid rgba(255,255,255,0.1);
-    border-radius:12px; padding:36px; width:100%; max-width:400px;
-  ">
-    <div style="text-align:center;margin-bottom:24px;">
-      <div style="font-size:32px;margin-bottom:8px;">🔑</div>
-      <div style="font-family:var(--ff-mono);font-size:16px;font-weight:700;color:var(--app-text);letter-spacing:1px;">RESET PASSWORD</div>
-      <div style="font-size:13px;color:var(--app-muted);margin-top:6px;">Enter your email and we will send you a reset link.</div>
-    </div>
-    <div id="forgotMsg" style="display:none;font-size:13px;padding:12px 16px;border-radius:8px;margin-bottom:16px;"></div>
-    <div style="margin-bottom:20px;">
-      <label style="font-size:12px;font-family:var(--ff-mono);color:var(--app-muted);">EMAIL ADDRESS</label>
-      <input id="forgotEmail" type="email" placeholder="you@example.com" style="
-        width:100%;margin-top:6px;padding:10px 14px;border-radius:8px;
-        background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
-        color:var(--app-text);font-size:14px;outline:none;box-sizing:border-box;
-      " onkeydown="if(event.key==='Enter')doForgotPassword()">
-    </div>
-    <button id="forgotBtn" onclick="doForgotPassword()" style="
-      width:100%;padding:12px;border-radius:8px;border:none;cursor:pointer;
-      background:var(--rust);color:#fff;font-size:14px;font-weight:600;margin-bottom:12px;
-    ">Send Reset Link</button>
-    <button onclick="hideForgotPassword()" style="
-      width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);
-      background:transparent;color:var(--app-muted);font-size:13px;cursor:pointer;
-    ">Back to Sign In</button>
-  </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
 <script src="../js/main.js"></script>
@@ -515,21 +457,16 @@ async function doGoogleLogin() {
 }
 
 async function doRegister() {
-  const first     = document.getElementById('regFirst').value.trim();
-  const last      = document.getElementById('regLast').value.trim();
-  const shop      = document.getElementById('regShop').value.trim();
-  const email     = document.getElementById('regEmail').value.trim();
-  const pw        = document.getElementById('regPw').value;
-  const pwConfirm = document.getElementById('regPwConfirm')?.value || '';
-  const err       = document.getElementById('registerError');
+  const first = document.getElementById('regFirst').value.trim();
+  const last  = document.getElementById('regLast').value.trim();
+  const shop  = document.getElementById('regShop').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pw    = document.getElementById('regPw').value;
+  const err   = document.getElementById('registerError');
   err.style.display = 'none';
 
   if (!first || !last || !shop || !email || !pw) {
     err.textContent = 'Please fill in all fields.'; err.style.display = 'block'; return;
-  }
-  if (pw !== pwConfirm) {
-    err.textContent = 'Passwords do not match. Please check and try again.';
-    err.style.display = 'block'; return;
   }
   if (pw.length < 8) {
     err.textContent = 'Password must be at least 8 characters.'; err.style.display = 'block'; return;
