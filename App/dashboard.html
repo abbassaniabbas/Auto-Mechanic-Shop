@@ -45,14 +45,19 @@
         color:var(--app-text); font-size:14px; outline:none; box-sizing:border-box;
       " onkeydown="if(event.key==='Enter')doLogin()">
     </div>
-    <div style="margin-bottom:24px;">
-      <label style="font-size:12px; font-family:var(--ff-mono); color:var(--app-muted); letter-spacing:0.5px;">PASSWORD</label>
+    <div style="margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <label style="font-size:12px; font-family:var(--ff-mono); color:var(--app-muted); letter-spacing:0.5px;">PASSWORD</label>
+        <a href="reset-password.html" style="font-size:12px; color:var(--amber,#e8a020); text-decoration:none; font-family:var(--ff-mono); letter-spacing:0.3px; opacity:0.85; transition:opacity 0.15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.85">Forgot password?</a>
+      </div>
       <input id="loginPw" type="password" placeholder="••••••••" style="
-        width:100%; margin-top:6px; padding:10px 14px; border-radius:8px;
+        width:100%; padding:10px 14px; border-radius:8px;
         background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
         color:var(--app-text); font-size:14px; outline:none; box-sizing:border-box;
       " onkeydown="if(event.key==='Enter')doLogin()">
     </div>
+
+    <div style="margin-bottom:16px;"></div>
 
     <button id="loginBtn" onclick="doLogin()" style="
       width:100%; padding:12px; border-radius:8px; border:none; cursor:pointer;
@@ -392,24 +397,14 @@ async function showApp(session) {
   try {
     let shop = await RBAC.getShop();
 
-    // If no shop linked yet, try to create one from auth metadata or localStorage
-    if (!shop && profile?.role === 'Admin' && profile?.id) {
-      // Try metadata first (set during registration, works cross-device)
-      let shopName = null;
-      try {
-        const { data: { user: authUser } } = await sb.auth.getUser();
-        shopName = authUser?.user_metadata?.shop_name || null;
-      } catch(e) {}
-      // Fall back to localStorage (same device/browser only)
-      if (!shopName) shopName = localStorage.getItem('gs_pending_shop');
-
-      if (shopName) {
+    // If no shop linked yet, try to create one from pending registration data
+    if (!shop && profile?.role === 'Admin') {
+      const pendingShop = localStorage.getItem('gs_pending_shop');
+      if (pendingShop && profile?.id) {
         try {
-          shop = await linkShopToProfile(profile.id, shopName);
+          shop = await linkShopToProfile(profile.id, pendingShop);
           localStorage.removeItem('gs_pending_shop');
-          _clearShopCache();
           RBAC.clearCache();
-          Toast.show('Shop linked successfully — welcome!', 'success');
         } catch(e) { console.warn('Auto shop link failed:', e.message); }
       }
     }
@@ -476,38 +471,25 @@ async function doRegister() {
   btn.textContent = 'Creating account…'; btn.disabled = true;
 
   try {
-    // 1. Sign up — pass shop_name in metadata so the DB trigger picks it up
-    //    even if email confirmation means userId is null here in JS
-    const { data, error: signUpErr } = await sb.auth.signUp({
-      email,
-      password: pw,
-      options: { data: { full_name: `${first} ${last}`, role: 'Admin', shop_name: shop } }
-    });
-    if (signUpErr) throw signUpErr;
-
+    // 1. Create auth user
+    const { data } = await Auth.signUp(email, pw, `${first} ${last}`, 'Admin');
     const userId = data?.user?.id;
 
-    // 2. If we have userId immediately (email confirmation OFF), link shop now
+    // 2. If we have a userId immediately (email confirmation may be off),
+    //    create the shop and link it to the profile right away.
+    //    If email confirmation is ON, userId may be null here —
+    //    the SQL trigger (fix_shop_link.sql) handles that case on first sign-in.
     if (userId) {
-      try {
-        await linkShopToProfile(userId, shop);
-      } catch(e) {
-        console.warn('linkShopToProfile during register:', e.message);
-      }
+      await linkShopToProfile(userId, shop);
     }
 
-    const confirmed = !!data?.user?.email_confirmed_at || !!data?.session;
+    // Store shop name so the trigger can use it on first sign-in too
+    localStorage.setItem('gs_pending_shop', shop);
+
     err.style.cssText += ';background:rgba(34,197,94,0.15);border-color:rgba(34,197,94,0.4);color:#4ade80;';
-    err.textContent = confirmed
-      ? 'Account created! You can now sign in.'
-      : 'Account created! Check your email to confirm, then sign in.';
+    err.textContent = 'Account created! Check your email to confirm, then sign in.';
     err.style.display = 'block';
     btn.textContent = 'Account Created ✓'; btn.disabled = true;
-
-    // If session exists immediately, go straight to app
-    if (data?.session) {
-      setTimeout(() => window.location.reload(), 1000);
-    }
   } catch(e) {
     err.textContent = e.message || 'Registration failed.';
     err.style.display = 'block';
@@ -516,32 +498,25 @@ async function doRegister() {
 }
 
 async function linkShopToProfile(userId, shopName) {
-  // Guard: if profile already has a shop_id, return existing shop
-  const { data: existing } = await sb.from('profiles')
-    .select('shop_id').eq('id', userId).single();
-  if (existing?.shop_id) {
-    const { data: shop } = await sb.from('shops')
-      .select('*').eq('id', existing.shop_id).single();
-    return shop;
-  }
-
-  // Create the shop row
+  // Create shop row
   const { data: shopRow, error: shopErr } = await sb.from('shops')
-    .insert({ name: shopName, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .insert({ name: shopName, updated_at: new Date().toISOString() })
     .select().single();
-  if (shopErr) throw new Error('Could not create shop: ' + shopErr.message);
+  if (shopErr) throw shopErr;
 
-  // Link shop_id back to profile — this is the critical step
+  // Link shop_id to profile
   const { error: profErr } = await sb.from('profiles')
     .update({ shop_id: shopRow.id })
     .eq('id', userId);
-  if (profErr) throw new Error('Could not link shop to profile: ' + profErr.message);
+  if (profErr) throw profErr;
 
-  // Create default shop_settings (non-fatal)
-  try {
-    await sb.from('shop_settings')
-      .insert({ shop_id: shopRow.id, shop_name: shopName, labor_rate: 90.00, tax_rate: 8.00 });
-  } catch(e) { console.warn('shop_settings skipped:', e.message); }
+  // Create a default shop_settings row for this shop
+  await sb.from('shop_settings')
+    .insert({ shop_id: shopRow.id, shop_name: shopName })
+    .select()
+    .maybeSingle()
+    .then(()=>{}) // ignore if already exists
+    .catch(()=>{});
 
   return shopRow;
 }
