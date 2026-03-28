@@ -211,6 +211,45 @@
   </div>
 </div>
 
+<!-- DELETE CUSTOMER CONFIRMATION MODAL -->
+<div class="modal-backdrop" id="deleteCustomerModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--danger)">DELETE CUSTOMER</span>
+      <button class="modal-close" onclick="Modal.close('deleteCustomerModal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;">
+        <div style="font-size:28px;flex-shrink:0;">&#9888;&#65039;</div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--app-text);margin-bottom:6px;" id="delCustName">this customer</div>
+          <div style="font-size:13px;color:var(--app-muted);line-height:1.65;">
+            This will permanently delete the customer and <strong style="color:var(--app-text)">all their linked records</strong> including:
+          </div>
+        </div>
+      </div>
+      <div style="background:rgba(181,43,30,0.08);border:1px solid rgba(181,43,30,0.25);border-radius:var(--r-sm);padding:12px 16px;font-size:12px;color:var(--app-muted);line-height:2;margin-bottom:4px;">
+        &#8226; All work orders &amp; parts used<br>
+        &#8226; All invoices<br>
+        &#8226; All appointments<br>
+        &#8226; All vehicles<br>
+        &#8226; Status history &amp; audit logs
+      </div>
+      <div style="font-size:12px;color:var(--danger);margin-top:10px;font-family:var(--ff-mono);letter-spacing:0.5px;">
+        This action cannot be undone.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('deleteCustomerModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" id="delCustConfirmBtn"
+        style="background:var(--danger);border-color:var(--danger);"
+        onclick="confirmDeleteCustomer()">
+        Yes, Delete Everything
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container" id="toastContainer"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
@@ -533,20 +572,48 @@ async function saveVehicle() {
 }
 
 /* ── DELETE ── */
-async function deleteCustomer(id) {
-  confirmAction('Delete this customer? Their vehicles will also be deleted.', async () => {
-    try {
-      await GS.deleteCustomer(id);
-      Toast.show('Customer deleted', 'info');
-      selectedCustomerId = null;
-      document.getElementById('custProfile').innerHTML = `
-        <div class="empty-state" style="padding:64px 24px">
-          <div class="empty-icon">👤</div><div class="empty-title">SELECT A CUSTOMER</div>
-          <div class="empty-body">Click any customer on the left to view their profile.</div>
-        </div>`;
-      await loadAll();
-    } catch(err) { Toast.show(err.message, 'error'); }
-  });
+// Stores the ID currently pending deletion
+let _pendingDeleteId = null;
+
+function deleteCustomer(id) {
+  const cust = customerData.find(c => c.id === id);
+  const name = cust ? `${cust.first_name} ${cust.last_name}` : 'this customer';
+
+  _pendingDeleteId = id;
+  document.getElementById('delCustName').textContent = name;
+
+  // Reset button state in case it was loading from a previous attempt
+  const btn = document.getElementById('delCustConfirmBtn');
+  btn.disabled    = false;
+  btn.textContent = 'Yes, Delete Everything';
+
+  Modal.open('deleteCustomerModal');
+}
+
+async function confirmDeleteCustomer() {
+  if (!_pendingDeleteId) return;
+
+  const btn = document.getElementById('delCustConfirmBtn');
+  btn.disabled    = true;
+  btn.textContent = 'Deleting…';
+
+  try {
+    await GS.deleteCustomer(_pendingDeleteId);
+    Modal.close('deleteCustomerModal');
+    Toast.show('Customer and all linked records deleted', 'info');
+    selectedCustomerId = null;
+    _pendingDeleteId   = null;
+    document.getElementById('custProfile').innerHTML = `
+      <div class="empty-state" style="padding:64px 24px">
+        <div class="empty-icon">👤</div><div class="empty-title">SELECT A CUSTOMER</div>
+        <div class="empty-body">Click any customer on the left to view their profile.</div>
+      </div>`;
+    await loadAll();
+  } catch(err) {
+    Toast.show(err.message || 'Delete failed. Please try again.', 'error');
+    btn.disabled    = false;
+    btn.textContent = 'Yes, Delete Everything';
+  }
 }
 
 async function deleteVehicleConfirm(id) {

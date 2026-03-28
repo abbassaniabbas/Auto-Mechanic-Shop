@@ -266,15 +266,16 @@ const GS = (() => {
 
   async function deleteCustomer(id) {
     const sid = await _shopId();
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      await sb.from('audit_logs').insert({
-        table_name: 'customers', record_id: id, action: 'DELETE',
-        changed_by: session?.user?.id || null, changes: null,
-      });
-    } catch(e) {}
-    const { error } = await sb.from('customers')
-      .delete().eq('id', id).eq('shop_id', sid);
+
+    // Calls a Postgres function that deletes all linked records
+    // (work_order_parts, wo_status_history, invoices, work_orders,
+    //  appointments, vehicles, notifications, audit_logs)
+    // in the correct FK order within a single transaction.
+    const { error } = await sb.rpc('delete_customer_cascade', {
+      p_customer_id: id,
+      p_shop_id:     sid,
+    });
+
     if (error) throw error;
   }
 
@@ -405,7 +406,7 @@ const GS = (() => {
     const partIds = parts.map(p => p.part_id).filter(Boolean);
     let invMap = {};
     if (partIds.length) {
-      const { data: inv } = await sb.from('inventory').select('id,name,sku,cost').in('id', partIds);
+      const { data: inv } = await sb.from('inventory').select('id,name,sku,unit_cost').in('id', partIds);
       (inv||[]).forEach(i => { invMap[i.id] = i; });
     }
     return {
@@ -423,25 +424,7 @@ const GS = (() => {
     const { data, error } = await sb.from('work_orders')
       .insert({ ...payload, shop_id: sid, status: 'Open', ref: '' }).select();
     if (error) throw error;
-    const wo = data?.[0];
-    if (wo && payload.mechanic_id) {
-      try {
-        const [custRes, vehRes] = await Promise.all([
-          payload.customer_id ? sb.from('customers').select('first_name,last_name').eq('id', payload.customer_id).single() : { data: null },
-          payload.vehicle_id  ? sb.from('vehicles').select('year,make,model').eq('id', payload.vehicle_id).single()        : { data: null },
-        ]);
-        const custName = custRes.data ? custRes.data.first_name + ' ' + custRes.data.last_name : 'a customer';
-        const vehLabel = vehRes.data  ? ((vehRes.data.year||'') + ' ' + vehRes.data.make + ' ' + vehRes.data.model).trim() : 'a vehicle';
-        await createNotification({
-          type: 'wo_update',
-          title: 'New Work Order Assigned -- ' + (wo.ref || ''),
-          body: 'You have been assigned a new job. Customer: ' + custName + '. Vehicle: ' + vehLabel + '. Fault: ' + (payload.fault || 'See work order') + '.',
-          related_id: wo.id, related_type: 'work_order',
-          for_user_id: payload.mechanic_id,
-        });
-      } catch(e) { console.warn('WO assignment notification failed:', e.message); }
-    }
-    return wo;
+    return data?.[0];
   }
 
   async function updateWorkOrder(id, payload) {
@@ -512,23 +495,6 @@ const GS = (() => {
     const { error } = await sb.from('work_order_parts')
       .delete().eq('work_order_id', workOrderId).eq('part_id', partId);
     if (error) throw error;
-  }
-
-  // Returns ALL work_order_parts for this shop — used by reports/turnover
-  async function getAllWorkOrderParts() {
-    const sid = await _shopId();
-    const { data: woRows, error: woErr } = await sb.from('work_orders')
-      .select('id, created_at').eq('shop_id', sid);
-    if (woErr) throw woErr;
-    if (!woRows?.length) return [];
-    const woIds = woRows.map(w => w.id);
-    const woDateMap = Object.fromEntries(woRows.map(w => [w.id, w.created_at]));
-    const { data, error } = await sb.from('work_order_parts')
-      .select('work_order_id, part_id, qty, unit_cost')
-      .in('work_order_id', woIds);
-    if (error) throw error;
-    // Attach the WO date so reports can filter by date range
-    return (data || []).map(p => ({ ...p, wo_date: woDateMap[p.work_order_id] || null }));
   }
 
   /* ---------------------------------------------------------------
@@ -641,7 +607,7 @@ const GS = (() => {
       po_id:     po.id,
       part_id:   i.part_id || i.inventory_id || i.partId,
       qty:       i.qty || i.qty_ordered || 1,
-      unit_cost: i.cost ?? i.unitCost ?? 0,
+      unit_cost: i.unit_cost ?? i.unitCost ?? 0,
     }));
     const { error: itemErr } = await sb.from('purchase_order_items').insert(poItems);
     if (itemErr) throw itemErr;
@@ -674,23 +640,12 @@ const GS = (() => {
      --------------------------------------------------------------- */
   async function getInvoices(filters = {}) {
     const sid = await _shopId();
-
-    // Step 1: get IDs scoped to this shop from the base table
-    let baseQ = sb.from('invoices')
-      .select('id').eq('shop_id', sid);
-    if (filters.status)      baseQ = baseQ.eq('status', filters.status);
-    if (filters.customer_id) baseQ = baseQ.eq('customer_id', filters.customer_id);
-    const { data: baseRows, error: baseErr } = await baseQ;
-    if (baseErr) throw baseErr;
-    if (!baseRows?.length) return [];
-
-    // Step 2: query the view (which has customer_name, customer_email, wo_ref, total)
-    // filtered to only IDs belonging to this shop
-    const ids = baseRows.map(r => r.id);
-    const { data, error } = await sb.from('v_invoices')
-      .select('*')
-      .in('id', ids)
+    let q = sb.from('invoices')
+      .select('*').eq('shop_id', sid)
       .order('created_at', { ascending: false });
+    if (filters.status)      q = q.eq('status', filters.status);
+    if (filters.customer_id) q = q.eq('customer_id', filters.customer_id);
+    const { data, error } = await q;
     if (error) throw error;
     return data;
   }
@@ -729,38 +684,14 @@ const GS = (() => {
      --------------------------------------------------------------- */
   async function getAppointments(filters = {}) {
     const sid = await _shopId();
-
-    // Step 1: get base data including guest columns from the base table
-    let baseQ = sb.from('appointments')
-      .select('id, guest_name, guest_phone, guest_email, vehicle_info, customer_id')
-      .eq('shop_id', sid);
-    if (filters.upcoming)    baseQ = baseQ.gte('appt_date', new Date().toISOString().split('T')[0]);
-    if (filters.mechanic_id) baseQ = baseQ.eq('mechanic_id', filters.mechanic_id);
-    const { data: baseRows, error: baseErr } = await baseQ;
-    if (baseErr) throw baseErr;
-    if (!baseRows?.length) return [];
-
-    // Build a map of id → guest fields for merging
-    const guestMap = {};
-    baseRows.forEach(r => {
-      guestMap[r.id] = {
-        guest_name:   r.guest_name,
-        guest_phone:  r.guest_phone,
-        guest_email:  r.guest_email,
-        vehicle_info: r.vehicle_info,
-      };
-    });
-
-    // Step 2: query the view for enriched data (customer_name, vehicle_label, mechanic_name)
-    const ids = baseRows.map(r => r.id);
-    const { data, error } = await sb.from('v_appointments')
-      .select('*')
-      .in('id', ids)
+    let q = sb.from('appointments')
+      .select('*').eq('shop_id', sid)
       .order('appt_date').order('appt_time');
+    if (filters.upcoming)    q = q.gte('appt_date', new Date().toISOString().split('T')[0]);
+    if (filters.mechanic_id) q = q.eq('mechanic_id', filters.mechanic_id);
+    const { data, error } = await q;
     if (error) throw error;
-
-    // Step 3: merge guest fields back in — these aren't in the view
-    return (data || []).map(a => ({ ...guestMap[a.id], ...a }));
+    return data;
   }
 
   async function createAppointment(payload) {
@@ -796,7 +727,6 @@ const GS = (() => {
         body:         payload.body,
         related_id:   payload.related_id   || null,
         related_type: payload.related_type || null,
-        for_user_id:  payload.for_user_id  || null,
         shop_id:      sid,
         read:         false,
       });
@@ -806,11 +736,8 @@ const GS = (() => {
 
   async function getNotifications(unreadOnly = false) {
     const sid = await _shopId();
-    const { data: { user: authUser } } = await sb.auth.getUser();
-    const uid = authUser?.id || null;
     let q = sb.from('notifications')
       .select('*').eq('shop_id', sid)
-      .or('for_user_id.is.null,for_user_id.eq.' + uid)
       .order('created_at', { ascending: false });
     if (unreadOnly) q = q.eq('read', false);
     const { data, error } = await q;
@@ -820,12 +747,9 @@ const GS = (() => {
 
   async function getUnreadCount() {
     const sid = await _shopId();
-    const { data: { user: authUser } } = await sb.auth.getUser();
-    const uid = authUser?.id || null;
     const { count, error } = await sb.from('notifications')
       .select('*', { count: 'exact', head: true })
-      .eq('shop_id', sid).eq('read', false)
-      .or('for_user_id.is.null,for_user_id.eq.' + uid);
+      .eq('shop_id', sid).eq('read', false);
     if (error) return 0;
     return count || 0;
   }
@@ -880,9 +804,8 @@ const GS = (() => {
         .select('id', { count: 'exact', head: true })
         .eq('shop_id', sid)
         .gte('appt_date', now),
-      // Use base table — total = labor_amount + parts_amount + tax_amount
       sb.from('invoices')
-        .select('labor_amount, parts_amount, tax_amount, paid_at, status')
+        .select('total_amount, paid_at, status')
         .eq('shop_id', sid),
       sb.from('notifications')
         .select('id', { count: 'exact', head: true })
@@ -902,7 +825,7 @@ const GS = (() => {
       const invoices = invRes.value.data || [];
       revenueThisMonth = invoices
         .filter(i => i.status === 'Paid' && i.paid_at?.startsWith(month))
-        .reduce((s, i) => s + (Number(i.labor_amount) || 0) + (Number(i.parts_amount) || 0) + (Number(i.tax_amount) || 0), 0);
+        .reduce((s, i) => s + (Number(i.total_amount) || 0), 0);
       unpaidInvoices = invoices.filter(i => ['Unpaid', 'Overdue'].includes(i.status)).length;
     }
 
@@ -943,7 +866,7 @@ const GS = (() => {
     const since = days[0] + 'T00:00:00.000Z';
 
     const { data, error } = await sb.from('invoices')
-      .select('paid_at, labor_amount, parts_amount, tax_amount')
+      .select('paid_at, total_amount')
       .eq('shop_id', sid).eq('status', 'Paid')
       .gte('paid_at', since).not('paid_at', 'is', null);
     if (error) throw error;
@@ -952,11 +875,7 @@ const GS = (() => {
     days.forEach(d => { byDay[d] = 0; });
     (data || []).forEach(inv => {
       const day = inv.paid_at.split('T')[0];
-      if (byDay[day] !== undefined) {
-        byDay[day] += (Number(inv.labor_amount) || 0)
-                    + (Number(inv.parts_amount) || 0)
-                    + (Number(inv.tax_amount)   || 0);
-      }
+      if (byDay[day] !== undefined) byDay[day] += Number(inv.total_amount) || 0;
     });
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1013,13 +932,91 @@ const GS = (() => {
   }
 
   /* ---------------------------------------------------------------
+     WHATSAPP CUSTOMER NOTIFICATIONS
+     --------------------------------------------------------------- */
+
+  function normaliseNGPhone(raw) {
+    if (!raw) return null;
+    let p = String(raw).replace(/[\s\-().+]/g, '');
+    if (p.startsWith('00234'))     p = '234' + p.slice(5);
+    else if (p.startsWith('+234')) p = '234' + p.slice(4);
+    else if (p.startsWith('0'))    p = '234' + p.slice(1);
+    return /^234\d{10}$/.test(p) ? p : null;
+  }
+
+  async function buildCompletionWhatsApp(workOrderId) {
+    const sid = await _shopId();
+
+    const [woRes, shopRes] = await Promise.all([
+      sb.from('work_orders')
+        .select('id,ref,fault,customer_id,vehicle_id')
+        .eq('id', workOrderId).eq('shop_id', sid).limit(1),
+      sb.from('shops').select('name,phone').eq('id', sid).limit(1),
+    ]);
+
+    const wo   = woRes.data?.[0];
+    const shop = shopRes.data?.[0];
+    if (!wo) throw new Error('Work order not found');
+
+    const [custRes, vehRes] = await Promise.all([
+      wo.customer_id
+        ? sb.from('customers').select('first_name,last_name,phone').eq('id', wo.customer_id).limit(1)
+        : { data: [] },
+      wo.vehicle_id
+        ? sb.from('vehicles').select('year,make,model').eq('id', wo.vehicle_id).limit(1)
+        : { data: [] },
+    ]);
+
+    const cust = custRes.data?.[0];
+    const veh  = vehRes.data?.[0];
+
+    if (!cust?.phone) throw new Error('Customer has no phone number on file');
+
+    const intlPhone = normaliseNGPhone(cust.phone);
+    if (!intlPhone)  throw new Error('Phone number "' + cust.phone + '" could not be formatted for WhatsApp. Ensure it is a valid Nigerian number.');
+
+    const vehicleStr = veh ? (veh.year || '') + ' ' + veh.make + ' ' + veh.model : 'your vehicle';
+    const shopName   = shop?.name || 'GearShift Auto';
+    const firstName  = cust.first_name || 'Customer';
+
+    const message =
+'Hello ' + firstName + ' \uD83D\uDC4B,\n\n'
++ 'Great news! Your *' + vehicleStr.trim() + '* is ready for pickup at *' + shopName + '* \uD83C\uDF89\n\n'
++ '*Work completed:*\n'
++ (wo.fault || 'Service complete') + '\n\n'
++ 'Please come in at your earliest convenience to collect your vehicle and settle your invoice. '
++ 'If you have any questions feel free to reply to this message.\n\n'
++ 'Thank you for choosing ' + shopName + '! \uD83D\uDD27\n\n'
++ '\u2014 ' + shopName + ' Team';
+
+    return {
+      phone:        cust.phone,
+      intlPhone,
+      waUrl:        'https://wa.me/' + intlPhone + '?text=' + encodeURIComponent(message),
+      message,
+      customerName: (firstName + ' ' + (cust.last_name || '')).trim(),
+      vehicleStr:   vehicleStr.trim(),
+      shopName,
+      woRef:        wo.ref || workOrderId,
+    };
+  }
+
+  async function markCustomerNotified(workOrderId) {
+    const sid = await _shopId();
+    const { error } = await sb.from('work_orders')
+      .update({ customer_notified_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', workOrderId).eq('shop_id', sid);
+    if (error) throw error;
+  }
+
+  /* ---------------------------------------------------------------
      PUBLIC API
      --------------------------------------------------------------- */
   return {
     getCustomers, getCustomer, createCustomer, updateCustomer, deleteCustomer, getAuditLog,
     getVehicles, createVehicle, updateVehicle, deleteVehicle,
     getWorkOrders, getWorkOrder, createWorkOrder, updateWorkOrder, getWOStatusHistory,
-    addPartToWorkOrder, removePartFromWorkOrder, getAllWorkOrderParts,
+    addPartToWorkOrder, removePartFromWorkOrder,
     getInventory, getInventoryItem, createInventoryItem, updateInventoryItem,
     adjustStock, getLowStockItems,
     getSuppliers, createSupplier, updateSupplier,
@@ -1032,6 +1029,7 @@ const GS = (() => {
     getRevenueMonthly, getRevenueWeekly,
     getStaff, updateProfile,
     getSettings, updateSettings,
+    buildCompletionWhatsApp, markCustomerNotified,
   };
 })();
 

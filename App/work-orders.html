@@ -47,7 +47,15 @@
 .stepper-step.active { background:var(--rust); border-color:var(--rust); color:var(--white); }
 .stepper-step.done   { background:rgba(31,122,74,.2); border-color:var(--success); color:#34d399; }
 
-/* Parts attachment */
+/* WA notified badge on kanban cards */
+.wa-notified-badge {
+  display:inline-flex;align-items:center;gap:4px;
+  font-family:var(--ff-mono);font-size:9px;letter-spacing:.5px;
+  color:#25D366;background:rgba(37,211,102,0.12);
+  border:1px solid rgba(37,211,102,0.25);
+  border-radius:4px;padding:2px 6px;margin-top:6px;
+}
+/* Part attachment */
 .part-line { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid rgba(48,54,61,.5); }
 .part-line:last-child { border-bottom:none; }
 .part-name  { flex:1; font-size:13px; color:var(--app-text); }
@@ -217,54 +225,78 @@
 <div class="modal-backdrop" id="attachPartModal">
   <div class="modal modal-sm">
     <div class="modal-header">
-      <span class="modal-title">ATTACH PART TO WORK ORDER</span>
+      <span class="modal-title">ATTACH PART</span>
       <button class="modal-close" onclick="Modal.close('attachPartModal')">✕</button>
     </div>
     <div class="modal-body">
-
-      <!-- Search box -->
       <div class="app-form-group">
-        <label class="app-label">Search Part</label>
-        <input class="app-input" id="ap-search" placeholder="Type part name or SKU…" oninput="filterPartDropdown()">
+        <label class="app-label">Part</label>
+        <select class="app-input" id="ap-part"></select>
       </div>
-
-      <!-- Part dropdown -->
-      <div class="app-form-group">
-        <label class="app-label">Select Part</label>
-        <select class="app-input" id="ap-part" onchange="onPartSelected()">
-          <option value="">— choose a part —</option>
-        </select>
-      </div>
-
-      <!-- Stock info banner -->
-      <div id="ap-stock-info" style="display:none;margin-top:-8px;margin-bottom:14px;padding:10px 14px;border-radius:var(--r-sm);font-family:var(--ff-mono);font-size:11px;letter-spacing:.3px;border:1px solid"></div>
-
-      <!-- Quantity -->
-      <div class="app-form-group">
-        <label class="app-label">Quantity to Attach</label>
-        <input class="app-input" type="number" id="ap-qty" min="1" value="1" oninput="onQtyChanged()">
-      </div>
-
-      <!-- Insufficient stock warning -->
-      <div id="ap-warn" style="display:none;background:rgba(181,43,30,.12);border:1px solid rgba(181,43,30,.4);color:#fca5a5;padding:10px 14px;border-radius:var(--r-sm);font-size:12px;margin-top:-4px">
-        ⚠ Insufficient stock — only <span id="ap-warn-qty"></span> unit(s) available.
-      </div>
-
-      <!-- Cost preview -->
-      <div id="ap-cost-preview" style="display:none;background:var(--app-surface2);border:1px solid var(--app-border);border-radius:var(--r-sm);padding:12px 14px;margin-top:8px;">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--app-muted);margin-bottom:6px;">
-          <span>Unit Cost</span><span class="td-mono" id="ap-unit-cost">—</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--app-text);">
-          <span>Line Total</span><span class="td-mono" id="ap-line-total">—</span>
-        </div>
-      </div>
-
+      <div id="ap-stock-info" style="font-size:12px;color:var(--app-muted);margin-top:-8px;margin-bottom:12px;font-family:var(--ff-mono)"></div>
     </div>
     <div class="modal-footer">
       <button class="app-btn app-btn-ghost" onclick="Modal.close('attachPartModal')">Cancel</button>
-      <button class="app-btn app-btn-primary" id="ap-submit-btn" onclick="doAttachPart()" disabled>
-        Attach &amp; Deduct Stock
+      <button class="app-btn app-btn-primary" onclick="doAttachPart()">Attach & Deduct Stock</button>
+    </div>
+  </div>
+</div>
+
+<!-- WHATSAPP NOTIFICATION MODAL -->
+<div class="modal-backdrop" id="waModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title" style="display:flex;align-items:center;gap:10px">
+        <svg viewBox="0 0 24 24" fill="#25D366" width="18" height="18"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.121.554 4.11 1.526 5.836L0 24l6.338-1.503A11.953 11.953 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.652-.523-5.157-1.432l-.371-.22-3.763.893.944-3.647-.24-.374A10 10 0 112 12c0 5.514 4.486 10 10 10z"/></svg>
+        NOTIFY CUSTOMER
+      </span>
+      <button class="modal-close" onclick="closeWAModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Customer / phone info strip -->
+      <div id="waCustomerStrip" style="
+        display:flex;align-items:center;gap:12px;
+        background:var(--app-surface2);border:1px solid var(--app-border);
+        border-radius:var(--r-sm);padding:12px 14px;margin-bottom:16px;
+      ">
+        <div style="width:36px;height:36px;border-radius:50%;background:#25D36622;
+          display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📱</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--app-text)" id="waCustomerName">—</div>
+          <div style="font-family:var(--ff-mono);font-size:11px;color:var(--app-muted)" id="waPhone">—</div>
+        </div>
+        <div style="font-size:11px;font-weight:600;color:#25D366;font-family:var(--ff-mono)">WhatsApp</div>
+      </div>
+
+      <!-- No phone warning -->
+      <div id="waNoPhone" style="display:none;
+        background:rgba(181,43,30,0.12);border:1px solid rgba(181,43,30,0.35);
+        border-radius:var(--r-sm);padding:12px 14px;font-size:13px;color:#f87171;
+        margin-bottom:16px;line-height:1.6
+      ">
+        ⚠ This customer has no phone number on file. Add one in the Customers page first.
+      </div>
+
+      <!-- Message preview / editor -->
+      <div style="margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+        <label class="app-label">MESSAGE PREVIEW</label>
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="resetWAMessage()" style="font-size:10px">↺ Reset</button>
+      </div>
+      <textarea class="app-input" id="waMessage"
+        style="min-height:200px;font-size:12px;line-height:1.65;font-family:var(--ff-mono);resize:vertical"
+        placeholder="Loading message…"></textarea>
+
+      <div style="font-size:11px;color:var(--app-muted);margin-top:6px;line-height:1.5">
+        WhatsApp Web or the WhatsApp app will open with this message pre-filled. You still tap <strong style="color:var(--app-text)">Send</strong> to deliver it.
+      </div>
+    </div>
+    <div class="modal-footer" id="waFooter">
+      <button class="app-btn app-btn-ghost" onclick="closeWAModal()">Skip for now</button>
+      <button class="app-btn app-btn-primary" id="waSendBtn" onclick="sendViaWhatsApp()"
+        style="background:#25D366;border-color:#25D366;gap:8px;display:flex;align-items:center">
+        <svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.121.554 4.11 1.526 5.836L0 24l6.338-1.503A11.953 11.953 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.652-.523-5.157-1.432l-.371-.22-3.763.893.944-3.647-.24-.374A10 10 0 112 12c0 5.514 4.486 10 10 10z"/></svg>
+        Open WhatsApp
       </button>
     </div>
   </div>
@@ -283,7 +315,10 @@ let custData  = [];
 let vehCache  = {};
 let selectedWO = null;
 let _editWOId  = null;
-let _user      = null; // current logged-in user
+
+// WhatsApp state
+let _waData      = null;   // result from GS.buildCompletionWhatsApp()
+let _waPendingId = null;   // WO id awaiting notification after status change
 
 const STATUS_ORDER = ['Open','In Progress','Awaiting Parts','Completed','Cancelled'];
 const STATUS_COLOURS = {
@@ -303,40 +338,25 @@ function formatDateTime(iso) {
 
 // ── INIT ──────────────────────────────────────────────────────────
 async function initPage() {
-  _user = await RBAC.guardPage('work-orders');
+  const _user = await RBAC.guardPage('work-orders');
   if (!_user) return;
+  RBAC.enforceWriteAccess(_user.role, 'work-orders');
   await RBAC.initSidebar('work-orders');
 
-  // Hide write controls for Mechanic and Parts Manager
-  const restrictedRole = ['Mechanic', 'Parts Manager'].includes(_user.role);
-  if (restrictedRole) {
-    // Hide New Work Order button in topbar
-    document.querySelectorAll('.app-topbar .app-btn-primary').forEach(b => b.style.display = 'none');
-    // Add read-only banner
-    const actions = document.querySelector('.topbar-actions');
-    if (actions) {
-      const banner = document.createElement('div');
-      banner.style.cssText = 'background:rgba(232,160,32,.12);border:1px solid rgba(232,160,32,.3);color:var(--amber);font-family:var(--ff-mono);font-size:10px;letter-spacing:1px;padding:6px 14px;border-radius:var(--r-sm)';
-      banner.textContent = '👁 VIEW ONLY — your role cannot create or edit work orders';
-      actions.prepend(banner);
-    }
-  }
-
-  // Load reference data — isolated so one failure doesn't kill the page
-  try { staffData = await GS.getStaff(); } catch(e) { console.warn('staff:', e.message); }
-  try { custData  = await GS.getCustomers(); populateCustomerSelect(custData); } catch(e) { console.warn('customers:', e.message); }
+  [staffData, custData] = await Promise.all([GS.getStaff(), GS.getCustomers()]);
+  populateMechanicSelect(staffData);
+  populateCustomerSelect(custData);
 
   await loadWorkOrders();
-  populateMechanicSelect(staffData);
 
   Realtime.subscribe('work_orders', {
     onInsert: () => loadWorkOrders(),
     onUpdate: (wo) => {
       const idx = woData.findIndex(w => w.id === wo.id);
-      if (idx >= 0) { woData[idx] = { ...woData[idx], ...wo }; renderKanban(); renderWOTable(); renderActiveJobs(); renderPartsRequests(); }
+      if (idx >= 0) { woData[idx] = { ...woData[idx], ...wo }; renderKanban(); renderWOTable(); }
       else loadWorkOrders();
     },
-    onDelete: (wo) => { woData = woData.filter(w => w.id !== wo.id); renderKanban(); renderWOTable(); renderActiveJobs(); renderPartsRequests(); }
+    onDelete: (wo) => { woData = woData.filter(w => w.id !== wo.id); renderKanban(); renderWOTable(); }
   });
 }
 
@@ -392,14 +412,12 @@ function renderKanban() {
     { status: 'Completed',      id: 'completed',      cls: 'completed' },
   ];
 
-  // Group orders
   const groups = {};
   COLS.forEach(col => { groups[col.status] = []; });
   woData.filter(w => w.status !== 'Cancelled').forEach(wo => {
     if (groups[wo.status]) groups[wo.status].push(wo);
   });
 
-  // Build columns HTML fresh every render
   const board = document.getElementById('kanbanBoard');
   if (!board) return;
   board.innerHTML = COLS.map(col => `
@@ -419,6 +437,7 @@ function renderKanban() {
               <span class="wo-card-mech">👤 ${wo.mechanic_name || 'Unassigned'}</span>
               <span style="font-size:10px;color:var(--app-muted)">${wo.created_at ? new Date(wo.created_at).toLocaleDateString('en-NG',{day:'numeric',month:'short'}) : '—'}</span>
             </div>
+            ${wo.customer_notified_at ? `<div class="wa-notified-badge">✓ Customer notified via WhatsApp</div>` : ''}
           </div>`).join('')
         : `<div style="padding:20px;text-align:center;color:var(--app-muted);font-size:12px;font-family:var(--ff-mono)">No orders</div>`}
       </div>
@@ -438,7 +457,7 @@ function renderWOTable() {
     return true;
   });
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--app-muted)">No work orders found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--app-muted)">No work orders found</td></tr>';
     return;
   }
   tbody.innerHTML = filtered.map(w => `
@@ -450,8 +469,21 @@ function renderWOTable() {
       <td>${makeBadge(w.status)}</td>
       <td class="td-muted">${w.mechanic_name || 'Unassigned'}</td>
       <td class="td-muted td-mono" style="font-size:11px">${formatDate(w.created_at)}</td>
+      <td>
+        ${w.status === 'Completed'
+          ? w.customer_notified_at
+            ? `<span style="font-size:10px;color:#25D366;font-family:var(--ff-mono)">✓ Notified</span>`
+            : `<button class="app-btn app-btn-ghost app-btn-sm" onclick="event.stopPropagation();openWAModal('${w.id}')"
+                style="color:#25D366;border-color:rgba(37,211,102,0.3);font-size:10px">
+                <svg viewBox="0 0 24 24" fill="#25D366" width="11" height="11" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.121.554 4.11 1.526 5.836L0 24l6.338-1.503A11.953 11.953 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.652-.523-5.157-1.432l-.371-.22-3.763.893.944-3.647-.24-.374A10 10 0 112 12c0 5.514 4.486 10 10 10z"/></svg>
+                Notify
+              </button>`
+          : '—'
+        }
+      </td>
     </tr>
   `).join('');
+
   // Populate mechanic filter
   const mf = document.getElementById('woMechFilter');
   if (mf && mf.options.length <= 1) {
@@ -468,12 +500,11 @@ function openNewWO() {
   _editWOId = null;
   document.getElementById('woModalTitle').textContent = 'NEW WORK ORDER';
   document.getElementById('saveWOBtn').textContent    = 'Create Work Order';
-  // Reset fields
   ['wo-fault','wo-notes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   ['wo-cust','wo-veh','wo-mech'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const laborEl = document.getElementById('wo-labor'); if (laborEl) laborEl.value = '';
   const statusEl = document.getElementById('wo-status');
-  if (statusEl) { statusEl.value = 'Open'; statusEl.disabled = true; } // always Open on create
+  if (statusEl) { statusEl.value = 'Open'; statusEl.disabled = true; }
   Modal.open('woModal');
 }
 
@@ -506,7 +537,6 @@ async function saveWO() {
   const notes   = document.getElementById('wo-notes')?.value.trim() || null;
   const status  = document.getElementById('wo-status')?.value || 'Open';
 
-  // Validation
   if (!custId) { Toast.show('Please select a customer', 'error'); return; }
   if (!vehId)  { Toast.show('Please select a vehicle',  'error'); return; }
   if (!fault)  { Toast.show('Fault description is required', 'error'); return; }
@@ -516,22 +546,29 @@ async function saveWO() {
 
   try {
     if (_editWOId) {
+      const prevWO = woData.find(w => w.id === _editWOId);
       await GS.updateWorkOrder(_editWOId, {
         customer_id: custId, vehicle_id: vehId,
         mechanic_id: mechId || null, fault, labor_hours: labor,
         notes, status,
       });
       Toast.show('Work order updated', 'success');
+      Modal.close('woModal');
+      await loadWorkOrders();
+      // If status just changed to Completed, trigger WA flow
+      if (status === 'Completed' && prevWO?.status !== 'Completed') {
+        await openWAModal(_editWOId);
+      }
     } else {
       const wo = await GS.createWorkOrder({
         customer_id: custId, vehicle_id: vehId,
         mechanic_id: mechId || null, fault, labor_hours: labor,
         notes,
       });
-      Toast.show(`Work order ${wo?.ref || ''} created — status: Open`, 'success');
+      Toast.show(`Work order ${wo?.ref || ''} created`, 'success');
+      Modal.close('woModal');
+      await loadWorkOrders();
     }
-    Modal.close('woModal');
-    await loadWorkOrders();
   } catch(err) {
     Toast.show(err.message || 'Failed to save work order', 'error');
   } finally {
@@ -554,6 +591,14 @@ async function openWODetail(id) {
           <div class="detail-row"><span class="detail-label">Created</span><span class="detail-val td-mono" style="font-size:11px">${formatDate(w.created_at)}</span></div>
           <div class="detail-row"><span class="detail-label">Mechanic</span><span class="detail-val">${w.mechanic_name || 'Unassigned'}</span></div>
           <div class="detail-row"><span class="detail-label">Labor Hours</span><span class="detail-val td-mono">${w.labor_hours ?? '—'} hrs</span></div>
+          ${w.customer_notified_at ? `
+          <div class="detail-row">
+            <span class="detail-label">Customer Notified</span>
+            <span class="detail-val" style="color:#25D366;font-size:12px;font-family:var(--ff-mono)">
+              ✓ Via WhatsApp<br>
+              <span style="color:var(--app-muted);font-size:10px">${formatDate(w.customer_notified_at)}</span>
+            </span>
+          </div>` : ''}
         </div>
         <div>
           <div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px;margin-bottom:8px">CUSTOMER & VEHICLE</div>
@@ -581,18 +626,18 @@ async function openWODetail(id) {
                 <td>${p.inventory?.name || '—'}</td>
                 <td class="td-mono" style="font-size:11px">${p.inventory?.sku || '—'}</td>
                 <td class="td-mono">${p.qty}</td>
-                <td class="td-mono">${formatCurrency(p.unit_cost || p.inventory?.cost || 0)}</td>
-                <td class="td-mono td-bold">${formatCurrency((p.unit_cost || p.inventory?.cost || 0) * p.qty)}</td>
+                <td class="td-mono">${formatCurrency(p.unit_cost || p.inventory?.unit_cost || 0)}</td>
+                <td class="td-mono td-bold">${formatCurrency((p.unit_cost || p.inventory?.unit_cost || 0) * p.qty)}</td>
               </tr>
             `).join('')}</tbody>
           </table>` : '<div style="color:var(--app-muted);font-size:13px">No parts added yet</div>'}
       </div>
     `;
-    // Load status history — wrapped so missing table never crashes the modal
+
+    // Status history timeline
     let history = [];
     try { history = await GS.getWOStatusHistory(w.id); } catch(e) { console.warn('Status history unavailable:', e); }
 
-    // Append status timeline to body
     const timeline = history.length ? `
       <div style="margin-top:20px">
         <div style="font-family:var(--ff-mono);font-size:9px;color:var(--app-muted);letter-spacing:1px;margin-bottom:10px">STATUS TIMELINE</div>
@@ -605,7 +650,7 @@ async function openWODetail(id) {
                 <span style="font-family:var(--ff-mono);font-size:11px;font-weight:700;color:${STATUS_COLOURS[h.status]||'var(--app-text)'}">${h.status}</span>
                 <span style="font-size:11px;color:var(--app-muted);margin-left:8px">by ${h.changer_name}</span>
               </div>
-              <span style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);white-space:nowrap;flex-shrink:0">${formatDateTime ? formatDateTime(h.changed_at) : h.changed_at?.slice(0,16).replace('T',' ')}</span>
+              <span style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);white-space:nowrap;flex-shrink:0">${formatDateTime(h.changed_at)}</span>
             </div>
           `).join('')}
         </div>
@@ -613,9 +658,7 @@ async function openWODetail(id) {
 
     document.getElementById('wdBody').innerHTML += timeline;
 
-    // Smart status buttons — only show valid next steps
-    const isClosed     = ['Completed','Cancelled'].includes(w.status);
-    const canWrite     = !['Mechanic','Parts Manager'].includes(_user?.role || '');
+    // Footer buttons
     const nextSteps = {
       'Open':           [['In Progress','→ In Progress','ghost'],['Cancelled','✕ Cancel','danger']],
       'In Progress':    [['Awaiting Parts','→ Awaiting Parts','ghost'],['Completed','✓ Complete','primary'],['Cancelled','✕ Cancel','danger']],
@@ -623,24 +666,31 @@ async function openWODetail(id) {
       'Completed':      [],
       'Cancelled':      [['Open','↺ Reopen','ghost']],
     };
-    const buttons = (nextSteps[w.status] || []).map(([status, label, style]) =>
+    const statusBtns = (nextSteps[w.status] || []).map(([status, label, style]) =>
       `<button class="app-btn app-btn-${style === 'danger' ? 'ghost" style="color:var(--danger)' : style} app-btn-sm"
         onclick="quickStatus('${w.id}','${status}')">${label}</button>`
     ).join('');
 
+    // WhatsApp button for completed orders not yet notified
+    const waBtn = w.status === 'Completed' && !w.customer_notified_at
+      ? `<button class="app-btn app-btn-sm" onclick="openWAModal('${w.id}');Modal.close('woDetailModal')"
+          style="background:#25D366;color:#fff;border:none;display:flex;align-items:center;gap:6px">
+          <svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.121.554 4.11 1.526 5.836L0 24l6.338-1.503A11.953 11.953 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.652-.523-5.157-1.432l-.371-.22-3.763.893.944-3.647-.24-.374A10 10 0 112 12c0 5.514 4.486 10 10 10z"/></svg>
+          Notify Customer
+        </button>`
+      : w.status === 'Completed' && w.customer_notified_at
+        ? `<span style="font-size:11px;color:#25D366;font-family:var(--ff-mono);display:flex;align-items:center;gap:4px">✓ Customer notified via WhatsApp</span>`
+        : '';
+
     document.getElementById('wdFooter').innerHTML = `
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;width:100%">
-        ${canWrite ? `<button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditWO('${w.id}');Modal.close('woDetailModal')">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditWO('${w.id}');Modal.close('woDetailModal')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           Edit Details
-        </button>` : ''}
-        ${!isClosed && canWrite ? `
-        <button class="app-btn app-btn-amber app-btn-sm" onclick="Modal.close('woDetailModal');openAttachPart('${w.id}')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27,6.96 12,12.01 20.73,6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-          Attach Part
-        </button>` : ''}
+        </button>
+        ${waBtn}
         <div style="flex:1"></div>
-        ${buttons}
+        ${statusBtns}
       </div>
     `;
     Modal.open('woDetailModal');
@@ -650,16 +700,12 @@ async function openWODetail(id) {
   }
 }
 
-
-
+// ── STATUS CHANGES ────────────────────────────────────────────────
 async function quickStatus(id, status) {
   const confirmNeeded = ['Completed','Cancelled'].includes(status);
   const proceed = () => _doStatusChange(id, status);
   if (confirmNeeded) {
-    confirmAction(
-      `Mark this work order as "${status}"? This action will notify the customer.`,
-      proceed
-    );
+    confirmAction(`Mark this work order as "${status}"?`, proceed);
   } else {
     await proceed();
   }
@@ -670,176 +716,89 @@ async function _doStatusChange(id, status) {
     await GS.updateWorkOrder(id, { status });
     Toast.show(`Status updated → ${status}`, 'success');
     await loadWorkOrders();
-    // Refresh detail modal if still open
     if (selectedWO?.id === id) {
       selectedWO.status = status;
-      await openWODetail(id);
-    } else {
       Modal.close('woDetailModal');
     }
-  } catch(err) { Toast.show(err.message || 'Failed to update status', 'error'); }
-}
-
-// ── ATTACH PARTS ─────────────────────────────────────────────────
-let _inventoryData = [];       // full inventory list for this shop
-let _attachingWOId = null;     // WO currently being attached to
-let _partOptions   = [];       // filtered list shown in dropdown
-
-async function openAttachPart(woId) {
-  _attachingWOId = woId;
-
-  // Reset form
-  document.getElementById('ap-search').value    = '';
-  document.getElementById('ap-qty').value        = '1';
-  document.getElementById('ap-part').innerHTML   = '<option value="">— choose a part —</option>';
-  document.getElementById('ap-stock-info').style.display  = 'none';
-  document.getElementById('ap-warn').style.display        = 'none';
-  document.getElementById('ap-cost-preview').style.display = 'none';
-  document.getElementById('ap-submit-btn').disabled        = true;
-
-  // Load inventory if not cached
-  try {
-    if (!_inventoryData.length) {
-      _inventoryData = await GS.getInventory();
-    }
-    _partOptions = _inventoryData;
-    populatePartDropdown(_inventoryData);
-  } catch(e) {
-    Toast.show('Could not load inventory', 'error');
-    return;
-  }
-
-  Modal.open('attachPartModal');
-}
-
-function populatePartDropdown(parts) {
-  const sel = document.getElementById('ap-part');
-  sel.innerHTML = '<option value="">— choose a part —</option>'
-    + parts.map(p =>
-        `<option value="${p.id}" data-qty="${p.qty||0}" data-cost="${p.cost||0}" data-sku="${p.sku||''}">
-          ${p.name}${p.sku ? ' ['+p.sku+']' : ''} — Stock: ${p.qty ?? 0}
-        </option>`
-      ).join('');
-  // Reset downstream UI
-  document.getElementById('ap-stock-info').style.display  = 'none';
-  document.getElementById('ap-warn').style.display        = 'none';
-  document.getElementById('ap-cost-preview').style.display = 'none';
-  document.getElementById('ap-submit-btn').disabled        = true;
-}
-
-function filterPartDropdown() {
-  const q = document.getElementById('ap-search').value.toLowerCase().trim();
-  const filtered = q
-    ? _inventoryData.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        (p.sku || '').toLowerCase().includes(q) ||
-        (p.category || '').toLowerCase().includes(q)
-      )
-    : _inventoryData;
-  _partOptions = filtered;
-  populatePartDropdown(filtered);
-}
-
-function onPartSelected() {
-  const sel     = document.getElementById('ap-part');
-  const opt     = sel.options[sel.selectedIndex];
-  const infoEl  = document.getElementById('ap-stock-info');
-  const warnEl  = document.getElementById('ap-warn');
-  const costEl  = document.getElementById('ap-cost-preview');
-  const submitBtn = document.getElementById('ap-submit-btn');
-
-  if (!sel.value) {
-    infoEl.style.display  = 'none';
-    warnEl.style.display  = 'none';
-    costEl.style.display  = 'none';
-    submitBtn.disabled     = true;
-    return;
-  }
-
-  const stock = parseInt(opt.dataset.qty)  || 0;
-  const cost  = parseFloat(opt.dataset.cost) || 0;
-  const qty   = parseInt(document.getElementById('ap-qty').value) || 1;
-
-  // Stock banner
-  infoEl.style.display = 'block';
-  if (stock <= 0) {
-    infoEl.style.cssText += ';background:rgba(181,43,30,.1);border-color:rgba(181,43,30,.4);color:#fca5a5;';
-    infoEl.textContent = `OUT OF STOCK — 0 units available`;
-    submitBtn.disabled = true;
-  } else if (stock <= 3) {
-    infoEl.style.cssText += ';background:rgba(232,160,32,.1);border-color:rgba(232,160,32,.4);color:#fcd34d;';
-    infoEl.textContent = `LOW STOCK — only ${stock} unit(s) remaining`;
-    submitBtn.disabled = qty > stock;
-  } else {
-    infoEl.style.cssText += ';background:rgba(31,122,74,.1);border-color:rgba(31,122,74,.4);color:#6ee7b7;';
-    infoEl.textContent = `IN STOCK — ${stock} unit(s) available`;
-    submitBtn.disabled = qty > stock;
-  }
-
-  // Cost preview
-  costEl.style.display = 'block';
-  document.getElementById('ap-unit-cost').textContent  = formatCurrency(cost);
-  document.getElementById('ap-line-total').textContent = formatCurrency(cost * qty);
-
-  // Insufficient stock warning
-  if (qty > stock && stock > 0) {
-    warnEl.style.display = 'block';
-    document.getElementById('ap-warn-qty').textContent = stock;
-  } else {
-    warnEl.style.display = 'none';
-  }
-}
-
-function onQtyChanged() {
-  onPartSelected(); // revalidate on qty change
-}
-
-async function doAttachPart() {
-  const sel   = document.getElementById('ap-part');
-  const partId = sel.value;
-  const qty    = parseInt(document.getElementById('ap-qty').value) || 1;
-  const opt    = sel.options[sel.selectedIndex];
-  const stock  = parseInt(opt?.dataset?.qty) || 0;
-  const cost   = parseFloat(opt?.dataset?.cost) || 0;
-
-  if (!partId)              { Toast.show('Please select a part', 'error'); return; }
-  if (qty < 1)              { Toast.show('Quantity must be at least 1', 'error'); return; }
-  if (!_attachingWOId)      { Toast.show('No work order selected', 'error'); return; }
-
-  // Hard stop for insufficient stock
-  if (qty > stock) {
-    Toast.show(`Only ${stock} unit(s) in stock — cannot attach ${qty}`, 'error');
-    return;
-  }
-
-  const btn = document.getElementById('ap-submit-btn');
-  btn.disabled = true;
-  btn.textContent = 'Attaching…';
-
-  try {
-    // 1. Add part to work order
-    await GS.addPartToWorkOrder(_attachingWOId, partId, qty, cost);
-
-    // 2. Inventory is decremented automatically by the wo_part_deduct DB trigger
-    //    — no manual adjustStock call needed here.
-
-    // 3. Update local inventory cache so dropdown reflects new stock
-    const cached = _inventoryData.find(p => p.id === partId);
-    if (cached) cached.qty = Math.max(0, stock - qty);
-
-    Toast.show(`${opt.textContent.split(' —')[0]} × ${qty} attached — stock decremented`, 'success');
-    Modal.close('attachPartModal');
-
-    // Refresh WO detail if open
-    if (selectedWO?.id === _attachingWOId) {
-      await openWODetail(_attachingWOId);
+    // Auto-open WhatsApp notification modal when Completed
+    if (status === 'Completed') {
+      await openWAModal(id);
     }
   } catch(err) {
-    Toast.show(err.message || 'Failed to attach part', 'error');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Attach & Deduct Stock';
+    Toast.show(err.message || 'Failed to update status', 'error');
   }
+}
+
+// ── WHATSAPP NOTIFICATION ─────────────────────────────────────────
+async function openWAModal(workOrderId) {
+  _waPendingId = workOrderId;
+  _waData      = null;
+
+  // Reset modal state
+  document.getElementById('waNoPhone').style.display    = 'none';
+  document.getElementById('waCustomerStrip').style.display = 'flex';
+  document.getElementById('waSendBtn').disabled         = true;
+  document.getElementById('waMessage').value            = 'Loading message…';
+  document.getElementById('waCustomerName').textContent = 'Loading…';
+  document.getElementById('waPhone').textContent        = '—';
+  Modal.open('waModal');
+
+  try {
+    _waData = await GS.buildCompletionWhatsApp(workOrderId);
+    document.getElementById('waCustomerName').textContent = _waData.customerName;
+    document.getElementById('waPhone').textContent        = _waData.phone + '  →  +' + _waData.intlPhone;
+    document.getElementById('waMessage').value            = _waData.message;
+    document.getElementById('waSendBtn').disabled         = false;
+  } catch(err) {
+    // No phone number or invalid number
+    document.getElementById('waCustomerStrip').style.display = 'none';
+    document.getElementById('waNoPhone').style.display       = 'flex';
+    document.getElementById('waNoPhone').textContent         = '⚠ ' + err.message;
+    document.getElementById('waMessage').value               = '';
+    document.getElementById('waSendBtn').disabled            = true;
+  }
+}
+
+function resetWAMessage() {
+  if (_waData) {
+    document.getElementById('waMessage').value = _waData.message;
+  }
+}
+
+async function sendViaWhatsApp() {
+  if (!_waData || !_waPendingId) return;
+
+  // Get the (possibly edited) message from the textarea
+  const editedMessage = document.getElementById('waMessage').value.trim();
+  if (!editedMessage) { Toast.show('Message cannot be empty', 'error'); return; }
+
+  // Build the wa.me URL with the edited message
+  const waUrl = `https://wa.me/${_waData.intlPhone}?text=${encodeURIComponent(editedMessage)}`;
+
+  // Open WhatsApp in a new tab
+  window.open(waUrl, '_blank');
+
+  // Mark as notified in the database
+  try {
+    await GS.markCustomerNotified(_waPendingId);
+    // Update local data so the badge appears immediately
+    const wo = woData.find(w => w.id === _waPendingId);
+    if (wo) wo.customer_notified_at = new Date().toISOString();
+    renderKanban();
+    renderWOTable();
+    Toast.show('WhatsApp opened — customer marked as notified ✓', 'success', 4000);
+  } catch(err) {
+    console.warn('markCustomerNotified failed:', err.message);
+    Toast.show('WhatsApp opened. Note: could not record notification.', 'warn');
+  }
+
+  closeWAModal();
+}
+
+function closeWAModal() {
+  Modal.close('waModal');
+  _waPendingId = null;
+  _waData      = null;
 }
 
 document.addEventListener('DOMContentLoaded', initPage);
