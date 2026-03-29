@@ -341,6 +341,75 @@ body {
 /* ── PANEL VISIBILITY ── */
 .panel { display: none; }
 .panel.active { display: block; }
+
+/* ── VIN DECODE ── */
+.vin-wrap { margin-bottom: 22px; }
+.vin-badge {
+  display:inline-block;
+  font-family:var(--ff-mono);
+  font-size:9px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:var(--amber);
+  background:rgba(232,160,32,0.1);
+  border:1px solid rgba(232,160,32,0.4);
+  padding:2px 7px;
+  border-radius:3px;
+  margin-left:6px;
+  vertical-align:middle;
+}
+.vin-input {
+  font-family:var(--ff-mono);
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+}
+.vin-status { margin-top:8px; min-height:20px; font-size:12px; }
+.vin-counter { color:#bbb; font-family:var(--ff-mono); }
+.vin-success {
+  display:flex; align-items:flex-start; gap:10px;
+  background:rgba(31,122,74,0.07);
+  border:1px solid rgba(31,122,74,0.25);
+  border-radius:var(--r);
+  padding:10px 14px;
+}
+.vin-success-icon { font-size:18px; flex-shrink:0; }
+.vin-success-title { font-weight:600; color:#1f7a4a; font-size:13px; line-height:1.4; }
+.vin-success-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+.vin-error {
+  display:flex; align-items:center; gap:8px;
+  background:rgba(181,43,30,0.07);
+  border:1px solid rgba(181,43,30,0.25);
+  border-radius:var(--r);
+  padding:10px 14px;
+  color:#b52b1e;
+  font-size:12px;
+}
+.vin-loading {
+  display:inline-flex; align-items:center; gap:6px;
+  color:var(--muted);
+}
+.vin-spinner {
+  width:12px; height:12px;
+  border:2px solid #ddd;
+  border-top-color:var(--amber);
+  border-radius:50%;
+  animation:vin-spin 0.65s linear infinite;
+  display:inline-block;
+  flex-shrink:0;
+}
+@keyframes vin-spin { to { transform:rotate(360deg); } }
+.vin-divider {
+  display:flex; align-items:center; gap:12px;
+  margin:20px 0 18px;
+  font-family:var(--ff-mono);
+  font-size:10px;
+  letter-spacing:1.5px;
+  text-transform:uppercase;
+  color:#bbb;
+}
+.vin-divider::before,.vin-divider::after {
+  content:''; flex:1; height:1px; background:var(--border);
+}
 </style>
 </head>
 <body>
@@ -403,6 +472,23 @@ body {
       <div class="card-title">YOUR VEHICLE</div>
       <p class="card-sub">Tell us about the vehicle and what service you need.</p>
       <div class="alert alert-error" id="p2-error"></div>
+
+      <!-- VIN AUTO-FILL -->
+      <div class="vin-wrap">
+        <label class="form-label">
+          VIN Number
+          <span class="vin-badge">Auto-fill</span>
+        </label>
+        <input class="form-input vin-input" id="f-vin"
+          placeholder="Enter your 17-character VIN to auto-fill details"
+          maxlength="17"
+          oninput="onVinInput()"
+          autocomplete="off"
+          spellcheck="false">
+        <div class="vin-status" id="vin-status"></div>
+      </div>
+
+      <div class="vin-divider">or fill in manually</div>
 
       <div class="form-row">
         <div class="form-group">
@@ -725,6 +811,7 @@ function buildSummary() {
   var make    = document.getElementById('f-make').value.trim();
   var model   = document.getElementById('f-model').value.trim();
   var plate   = document.getElementById('f-plate').value.trim();
+  var vin     = document.getElementById('f-vin').value.trim().toUpperCase();
   var service = document.getElementById('f-service').value;
   var notes   = document.getElementById('f-notes').value.trim();
   var date    = document.getElementById('f-date').value;
@@ -737,6 +824,7 @@ function buildSummary() {
     { label: 'Phone',   value: phone },
     { label: 'Email',   value: email || '—' },
     { label: 'Vehicle', value: year + ' ' + make + ' ' + model + (plate ? ' (' + plate + ')' : '') },
+    { label: 'VIN',     value: vin || '—' },
     { label: 'Service', value: service },
     { label: 'Date',    value: dateLabel },
     { label: 'Time',    value: selectedSlot },
@@ -834,16 +922,137 @@ async function submitBooking() {
   }
 }
 
+/* ---- VIN DECODER (NHTSA — free, no key required) ---- */
+var _vinCache = {};
+
+async function decodeVIN(vin) {
+  var v = vin.trim().toUpperCase();
+  if (v.length !== 17) return null;
+  if (_vinCache[v]) return _vinCache[v];
+
+  var url = 'https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/' + v + '?format=json';
+  var res = await fetch(url);
+  if (!res.ok) throw new Error('Could not reach VIN lookup service');
+  var json = await res.json();
+
+  function get(variable) {
+    var row = (json.Results || []).find(function(r) { return r.Variable === variable; });
+    return (row && row.Value && row.Value !== 'Not Applicable' && row.Value !== '0') ? row.Value : null;
+  }
+
+  var result = {
+    make:      get('Make'),
+    model:     get('Model'),
+    year:      get('Model Year'),
+    bodyClass: get('Body Class'),
+    fuelType:  get('Fuel Type - Primary'),
+    cylinders: get('Engine Number of Cylinders'),
+    drive:     get('Drive Type'),
+  };
+
+  if (!result.make && !result.model) {
+    throw new Error('VIN not recognised — please check the number and fill in the details manually');
+  }
+
+  _vinCache[v] = result;
+  return result;
+}
+
+function toTitleCase(str) {
+  if (!str) return str;
+  return str.toLowerCase().replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+}
+
+var _vinTimer = null;
+
+function onVinInput() {
+  var vinEl  = document.getElementById('f-vin');
+  var status = document.getElementById('vin-status');
+  if (!vinEl || !status) return;
+
+  // Keep uppercase
+  var vin = vinEl.value.toUpperCase();
+  vinEl.value = vin;
+
+  // Clear any pending decode
+  if (_vinTimer) { clearTimeout(_vinTimer); _vinTimer = null; }
+
+  if (vin.length === 0) {
+    status.innerHTML = '';
+    return;
+  }
+
+  if (vin.length < 17) {
+    status.innerHTML = '<span class="vin-counter">' + vin.length + '/17 characters</span>';
+    return;
+  }
+
+  if (vin.length > 17) {
+    status.innerHTML = '<div class="vin-error"><span>&#9888;</span> VIN must be exactly 17 characters</div>';
+    return;
+  }
+
+  // Exactly 17 — debounce 300ms then decode
+  status.innerHTML = '<div class="vin-loading"><span class="vin-spinner"></span>Looking up VIN…</div>';
+
+  _vinTimer = setTimeout(async function() {
+    try {
+      var info = await decodeVIN(vin);
+      if (!info) return;
+
+      // Auto-fill fields — only overwrite if currently empty
+      function fill(id, val) {
+        if (!id || !val) return;
+        var el = document.getElementById(id);
+        if (el && !el.value) el.value = val;
+      }
+
+      fill('f-make',  toTitleCase(info.make));
+      fill('f-model', toTitleCase(info.model));
+      // Year always set — it's encoded in the VIN
+      if (info.year) {
+        var yearEl = document.getElementById('f-year');
+        if (yearEl) yearEl.value = info.year;
+      }
+
+      // Build display string
+      var parts = [info.year, toTitleCase(info.make), toTitleCase(info.model)].filter(Boolean);
+      var extras = [info.bodyClass, info.fuelType,
+        info.cylinders ? info.cylinders + '-cyl' : null,
+        info.drive
+      ].filter(Boolean).join(' &middot; ');
+
+      status.innerHTML =
+        '<div class="vin-success">' +
+          '<div class="vin-success-icon">&#9989;</div>' +
+          '<div>' +
+            '<div class="vin-success-title">' + parts.join(' ') + '</div>' +
+            (extras ? '<div class="vin-success-sub">' + extras + '</div>' : '') +
+            '<div class="vin-success-sub" style="margin-top:4px;color:#888">Fields auto-filled — review before continuing</div>' +
+          '</div>' +
+        '</div>';
+
+    } catch(err) {
+      status.innerHTML =
+        '<div class="vin-error">' +
+          '<span>&#9888;</span>' +
+          (err.message || 'Could not decode VIN — please fill in the details manually') +
+        '</div>';
+    }
+  }, 300);
+}
+
 /* ---- RESET ---- */
 function resetForm() {
   ['f-firstname','f-lastname','f-phone','f-email',
-   'f-year','f-make','f-model','f-plate','f-notes'].forEach(function(id) {
+   'f-vin','f-year','f-make','f-model','f-plate','f-notes'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
   document.getElementById('f-service').value = '';
   document.getElementById('f-date').value = '';
   document.getElementById('slots-wrap').style.display = 'none';
+  var vinSt = document.getElementById('vin-status'); if (vinSt) vinSt.innerHTML = '';
   selectedSlot = null;
   document.querySelector('.steps').style.display = 'flex';
   goPanel(1);
