@@ -966,9 +966,18 @@ async function resolveAccount() {
   _resolveTimer = setTimeout(async () => {
     try {
       const { data, error } = await sb.functions.invoke('resolve-bank-account', {
-        body: { bank_code: bankCode, account_number: accountNo }
-      });
-      if (error || !data?.account_name) throw new Error('Could not verify account');
+    body: { bank_code: bankCode, account_number: accountNo }
+    });
+  if (error) {
+  // error.context contains the actual response body from your edge function
+  let msg = 'Could not verify account';
+  try {
+    const errBody = await error.context?.json?.();
+    if (errBody?.error) msg = errBody.error;
+      } catch(_) {}
+  throw new Error(msg);
+    }
+if (!data?.account_name) throw new Error('Could not verify account');
       display.innerHTML = `
         <div style="background:rgba(31,122,74,0.1);border:1px solid rgba(31,122,74,0.25);border-radius:var(--r-sm);padding:8px 12px;font-size:12px;color:#6ee7b7;display:flex;align-items:center;gap:6px">
           ✓ <strong>${data.account_name}</strong>

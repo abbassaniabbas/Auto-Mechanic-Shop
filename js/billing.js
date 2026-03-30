@@ -125,18 +125,14 @@ const PaystackSubscription = {
             { display_name: 'Cycle', variable_name: 'plan_cycle', value: cycle },
           ],
         },
-        onClose() {
-          reject(new Error('Payment cancelled'));
-        },
-        async callback(response) {
-          try {
-            // Activate plan in database
-            await PaystackSubscription._activate(shop.id, cycle, response.reference);
-            resolve(response);
-          } catch(err) {
-            reject(err);
-          }
-        },
+    onClose() {
+    reject(new Error('Payment cancelled'));
+      },
+    callback(response) {
+    PaystackSubscription._activate(shop.id, cycle, response.reference)
+    .then(() => resolve(response))
+    .catch(err => reject(err));
+      },
       });
       handler.openIframe();
     });
@@ -260,14 +256,11 @@ const PaystackInvoice = {
         onClose() {
           reject(new Error('Payment cancelled'));
         },
-        async callback(response) {
-          try {
-            await PaystackInvoice._record(invoiceId, amountNaira, response.reference, subaccountCode, shop?.id);
-            resolve(response);
-          } catch(err) {
-            reject(err);
-          }
-        },
+        callback(response) {
+        PaystackInvoice._record(invoiceId, amountNaira, response.reference, subaccountCode, shop?.id)
+        .then(() => resolve(response))
+        .catch(err => reject(err));
+          },
       });
       handler.openIframe();
     });
