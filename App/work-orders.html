@@ -682,16 +682,35 @@ async function openWODetail(id) {
         ? `<span style="font-size:11px;color:#25D366;font-family:var(--ff-mono);display:flex;align-items:center;gap:4px">✓ Customer notified via WhatsApp</span>`
         : '';
 
-    document.getElementById('wdFooter').innerHTML = `
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditWO('${w.id}');Modal.close('woDetailModal')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Edit Details
-        </button>
-        ${waBtn}
-        <div style="flex:1"></div>
-        ${statusBtns}
-      </div>
+    // Build Generate Invoice button — only show if Completed and no invoice yet
+let genInvBtn = '';
+if (w.status === 'Completed') {
+  try {
+    const { data: existingInv } = await sb.from('invoices')
+      .select('id,ref').eq('work_order_id', w.id).limit(1);
+    if (existingInv?.length) {
+      genInvBtn = `<span style="font-size:11px;color:var(--success);font-family:var(--ff-mono);display:flex;align-items:center;gap:4px">🧾 Invoice ${existingInv[0].ref || ''} created</span>`;
+    } else {
+      genInvBtn = `<button class="app-btn app-btn-primary app-btn-sm" id="genInvBtn-${w.id}"
+        onclick="generateInvoice('${w.id}')">🧾 Generate Invoice</button>`;
+    }
+  } catch(e) {
+    genInvBtn = `<button class="app-btn app-btn-primary app-btn-sm" id="genInvBtn-${w.id}"
+      onclick="generateInvoice('${w.id}')">🧾 Generate Invoice</button>`;
+  }
+}
+
+document.getElementById('wdFooter').innerHTML = `
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button class="app-btn app-btn-ghost app-btn-sm" onclick="openEditWO('${w.id}');Modal.close('woDetailModal')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Edit Details
+    </button>
+    ${waBtn}
+    ${genInvBtn}
+    <div style="flex:1"></div>
+    ${statusBtns}
+  </div>
     `;
     Modal.open('woDetailModal');
   } catch (err) {
@@ -726,6 +745,22 @@ async function _doStatusChange(id, status) {
     }
   } catch(err) {
     Toast.show(err.message || 'Failed to update status', 'error');
+  }
+}
+
+
+async function generateInvoice(workOrderId) {
+  const btn = document.getElementById(`genInvBtn-${workOrderId}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+  try {
+    const invoice = await GS.generateInvoiceFromWO(workOrderId);
+    Toast.show(`Invoice ${invoice.ref || ''} created successfully ✓`.trim(), 'success', 4000);
+    Modal.close('woDetailModal');
+    // Navigate to invoices page so they can see it immediately
+    setTimeout(() => window.location.href = 'invoices.html', 1200);
+  } catch(err) {
+    Toast.show(err.message || 'Could not generate invoice', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🧾 Generate Invoice'; }
   }
 }
 

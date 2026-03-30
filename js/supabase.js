@@ -650,6 +650,53 @@ const GS = (() => {
     return data;
   }
 
+
+  async function generateInvoiceFromWO(workOrderId) {
+  const sid = await _shopId();
+
+  // 1. Check if invoice already exists for this WO
+  const { data: existing } = await sb.from('invoices')
+    .select('id,ref').eq('work_order_id', workOrderId).eq('shop_id', sid).limit(1);
+  if (existing?.length) throw new Error(`Invoice ${existing[0].ref || ''} already exists for this work order`.trim());
+
+  // 2. Load work order (full detail with parts)
+  const wo = await getWorkOrder(workOrderId);
+  if (!wo) throw new Error('Work order not found');
+  if (wo.status !== 'Completed') throw new Error('Work order must be Completed before generating an invoice');
+
+  // 3. Load shop settings for labor rate and tax rate
+  const settings = await getSettings();
+  const laborRate = parseFloat(settings?.labor_rate || 0);
+  const taxRate   = parseFloat(settings?.tax_rate   || 0) / 100;
+
+  // 4. Calculate amounts
+  const laborAmount = Math.round((wo.labor_hours || 0) * laborRate * 100) / 100;
+  const partsAmount = Math.round(
+    (wo.parts || []).reduce((sum, p) => sum + ((p.unit_cost || p.inventory?.unit_cost || 0) * p.qty), 0) * 100
+  ) / 100;
+  const taxAmount   = Math.round((laborAmount + partsAmount) * taxRate * 100) / 100;
+  const totalAmount = Math.round((laborAmount + partsAmount + taxAmount) * 100) / 100;
+
+  // 5. Create the invoice
+  const { data, error } = await sb.from('invoices').insert({
+    shop_id:        sid,
+    work_order_id:  workOrderId,
+    wo_ref:         wo.ref || null,
+    customer_id:    wo.customer_id || null,
+    customer_name:  wo.customer_name || null,
+    vehicle_id:     wo.vehicle_id   || null,
+    status:         'Unpaid',
+    labor_amount:   laborAmount,
+    parts_amount:   partsAmount,
+    tax_amount:     taxAmount,
+    total_amount:   totalAmount,
+    ref:            '',
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+
   async function createInvoice(payload) {
     const sid = await _shopId();
     const { data, error } = await sb.from('invoices')
@@ -1021,7 +1068,7 @@ const GS = (() => {
     adjustStock, getLowStockItems,
     getSuppliers, createSupplier, updateSupplier,
     getPurchaseOrders, createPurchaseOrder, updatePOStatus, receivePOItem,
-    getInvoices, createInvoice, markInvoicePaid, updateInvoiceStatus,
+    getInvoices, createInvoice, generateInvoiceFromWO, markInvoicePaid, updateInvoiceStatus,
     getAppointments, createAppointment, updateAppointment, cancelAppointment,
     createNotification, getNotifications, getUnreadCount, markNotificationRead,
     markAllNotificationsRead, deleteNotification, clearReadNotifications,
