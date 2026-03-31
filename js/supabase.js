@@ -684,7 +684,6 @@ const GS = (() => {
     wo_ref:         wo.ref || null,
     customer_id:    wo.customer_id || null,
     customer_name:  wo.customer_name || null,
-    vehicle_id:     wo.vehicle_id   || null,
     status:         'Unpaid',
     labor_amount:   laborAmount,
     parts_amount:   partsAmount,
