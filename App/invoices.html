@@ -305,15 +305,16 @@ function renderInvoiceTable(filter) {
         <td>${makeBadge(inv.status||'Unpaid')}</td>
         <td class="td-mono" style="font-size:11px">${formatDate(inv.created_at)}</td>
         <td>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            ${inv.status !== 'Paid' ? `
-              <button class="app-btn app-btn-ghost app-btn-sm"
-                onclick="markPaid('${inv.id}')">Record</button>
-              <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
-                style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px">
-                💳 Pay Online
-              </button>` : `<span style="color:var(--success);font-size:11px;font-family:var(--ff-mono)">✓ Paid</span>`}
-          </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+  <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
+  ${inv.status !== 'Paid' ? `
+      <button class="app-btn app-btn-ghost app-btn-sm"
+        onclick="markPaid('${inv.id}')">Record</button>
+      <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
+        style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:4px">
+        💳 Pay Online
+      </button>` : `<span style="color:var(--success);font-size:11px;font-family:var(--ff-mono)">✓ Paid</span>`}
+      </div>
         </td>
       </tr>`).join('') : emptyRow;
   }
@@ -336,13 +337,14 @@ function renderInvoiceTable(filter) {
           <td class="td-mono" style="font-size:11px">${formatDate(inv.created_at)}</td>
           <td class="td-mono" style="color:${daysOut > 30 ? 'var(--danger)' : 'var(--app-muted)'}">${daysOut}d</td>
           <td>
-            <div style="display:flex;gap:4px">
-              <button class="app-btn app-btn-ghost app-btn-sm" onclick="markPaid('${inv.id}')">Record</button>
-              <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
-                style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer">
-                💳 Pay Online
-              </button>
-            </div>
+        <div style="display:flex;gap:4px">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="markPaid('${inv.id}')">Record</button>
+          <button class="app-btn app-btn-sm" onclick="payViaPaystack('${inv.id}')"
+          style="background:#25D366;color:white;border:none;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer">
+          💳 Pay Online
+          </button>
+        </div>
           </td>
         </tr>`;
     }).join('') : '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--app-muted)">No outstanding invoices</td></tr>';
@@ -359,7 +361,12 @@ function renderInvoiceTable(filter) {
         <td class="td-mono td-bold">${formatCurrency(inv.total_amount||0)}</td>
         <td>${inv.payment_method||'—'}</td>
         <td class="td-mono" style="font-size:11px">${formatDate(inv.paid_at)}</td>
-        <td><span style="font-size:10px;color:var(--success);font-family:var(--ff-mono)">✓ PAID</span></td>
+        <td>
+        <div style="display:flex;gap:4px;align-items:center">
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="openInvoice('${inv.id}')">👁 View</button>
+          <span style="font-size:10px;color:var(--success);font-family:var(--ff-mono)">✓ PAID</span>
+        </div>
+      </td>
       </tr>`).join('')
     : '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--app-muted)">No paid invoices yet</td></tr>';
   }
