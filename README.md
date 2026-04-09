@@ -410,10 +410,7 @@ Auto-fills vehicle forms from a 17-character VIN using the US DOT's free public 
 
 | | |
 |---|---|
-| **Abbas Sani Abbas** | Data Scientist · SaaS Builder · IT Professional |
-| 📍 | Kaduna, Nigeria |
-| 🎓 | M.Sc. Data Science — NDA · MBA — ABU Zaria · B.Sc. CS — Baze University |
-| 💼 | Former Asst. Head of IT, AfriVentures Holdings |
+| **Abbas Sani Abbas** | Software Engineer · Data Scientist · IT Professional |
 | 📧 | abbassani94@gmail.com |
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/abbassaniabbas)
