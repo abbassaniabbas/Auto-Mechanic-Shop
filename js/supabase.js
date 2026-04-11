@@ -140,7 +140,7 @@ const Auth = (() => {
 
   async function requireAuth() {
     const session = await getSession();
-    if (!session) window.location.href = '../app/dashboard.html';
+    if (!session) window.location.href = 'dashboard.html';
     return session;
   }
 
@@ -622,7 +622,7 @@ const GS = (() => {
   async function getPurchaseOrders() {
     const sid = await _shopId();
     const { data, error } = await sb.from('purchase_orders')
-      .select('*, suppliers(id,name,phone,email), purchase_order_items(*, inventory:part_id(id,name,sku))')
+      .select('*, suppliers(name), purchase_order_items(*, inventory:part_id(id,name,sku))')
       .eq('shop_id', sid).order('created_at', { ascending: false });
     if (error) throw error;
     return data;
@@ -647,7 +647,7 @@ const GS = (() => {
     if (itemErr) throw itemErr;
 
     const { data: full } = await sb.from('purchase_orders')
-      .select('*, suppliers(id,name,phone,email), purchase_order_items(*, inventory:part_id(name,sku))')
+      .select('*, suppliers(name), purchase_order_items(*, inventory:part_id(name,sku))')
       .eq('id', po.id).single();
     return full || po;
   }
