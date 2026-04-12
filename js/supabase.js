@@ -759,8 +759,20 @@ const GS = (() => {
       .order('appt_date').order('appt_time');
     if (error) throw error;
 
-    // Step 3: merge guest fields back in — these aren't in the view
-    return (data || []).map(a => ({ ...guestMap[a.id], ...a }));
+    // Step 3: merge — view data first, then guest fields on top
+    // Guest fields must come LAST so they are never overwritten by null view columns
+    return (data || []).map(a => {
+      const g = guestMap[a.id] || {};
+      return {
+        ...a,
+        guest_name:   g.guest_name   != null ? g.guest_name   : (a.guest_name   || null),
+        guest_phone:  g.guest_phone  != null ? g.guest_phone  : (a.guest_phone  || null),
+        guest_email:  g.guest_email  != null ? g.guest_email  : (a.guest_email  || null),
+        vehicle_info: g.vehicle_info != null ? g.vehicle_info : (a.vehicle_info || null),
+        // Use vehicle_info as fallback for vehicle_label if view returns nothing
+        vehicle_label: a.vehicle_label || g.vehicle_info || null,
+      };
+    });
   }
 
   async function createAppointment(payload) {

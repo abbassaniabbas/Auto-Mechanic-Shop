@@ -197,7 +197,7 @@
             <span style="font-size:12px;color:var(--app-muted)">Confirm or reschedule each request</span>
           </div>
           <table class="data-table">
-            <thead><tr><th>Customer</th><th>Service Requested</th><th>Vehicle</th><th>Preferred Date</th><th>Notes</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Customer</th><th>Service</th><th>Vehicle</th><th>Date & Time</th><th>Contact / Notes</th><th>Actions</th></tr></thead>
             <tbody id="requestsBody"></tbody>
           </table>
         </div>
@@ -299,6 +299,82 @@
   </div>
 </div>
 
+<!-- EDIT APPOINTMENT MODAL -->
+<div class="modal-backdrop" id="editApptModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">EDIT APPOINTMENT</span>
+      <button class="modal-close" onclick="Modal.close('editApptModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editApptId">
+      <div style="background:rgba(232,160,32,0.08);border:1px solid rgba(232,160,32,0.2);border-radius:var(--r-sm);padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:20px">
+        &#x2139; Edit customer details and assign a technician. When confirmed, a customer record is created automatically.
+      </div>
+      <div style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);letter-spacing:1px;margin-bottom:10px">CUSTOMER DETAILS</div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Full Name <span style="color:var(--danger)">*</span></label>
+          <input class="app-input" type="text" id="editGuestName" placeholder="John Doe">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Phone</label>
+          <input class="app-input" type="tel" id="editGuestPhone" placeholder="+234 800 000 0000">
+        </div>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Email</label>
+          <input class="app-input" type="email" id="editGuestEmail" placeholder="customer@email.com">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Vehicle</label>
+          <input class="app-input" type="text" id="editVehicleInfo" placeholder="2020 Toyota Camry">
+        </div>
+      </div>
+      <div style="font-family:var(--ff-mono);font-size:10px;color:var(--app-muted);letter-spacing:1px;margin:16px 0 10px">APPOINTMENT DETAILS</div>
+      <div class="app-form-group">
+        <label class="app-label">Service</label>
+        <select class="app-input" id="editService">
+          <option>Oil Change</option><option>Brake Service</option><option>Tire Rotation</option>
+          <option>Engine Diagnostic</option><option>AC Service</option><option>Battery Replacement</option>
+          <option>Transmission Service</option><option>Wheel Alignment</option>
+          <option>General Inspection</option><option>Other</option>
+        </select>
+      </div>
+      <div class="app-form-row">
+        <div class="app-form-group">
+          <label class="app-label">Date <span style="color:var(--danger)">*</span></label>
+          <input class="app-input" type="date" id="editApptDate">
+        </div>
+        <div class="app-form-group">
+          <label class="app-label">Time</label>
+          <select class="app-input" id="editApptTime">
+            <option value="08:00">08:00 AM</option><option value="09:00">09:00 AM</option>
+            <option value="10:00">10:00 AM</option><option value="11:00">11:00 AM</option>
+            <option value="12:00">12:00 PM</option><option value="13:00">01:00 PM</option>
+            <option value="14:00">02:00 PM</option><option value="15:00">03:00 PM</option>
+            <option value="16:00">04:00 PM</option>
+          </select>
+        </div>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Assign Technician</label>
+        <select class="app-input" id="editTechId">
+          <option value="">— Unassigned —</option>
+        </select>
+      </div>
+      <div class="app-form-group">
+        <label class="app-label">Notes</label>
+        <textarea class="app-input" id="editNotes" rows="2" placeholder="Additional notes"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="app-btn app-btn-ghost" onclick="Modal.close('editApptModal')">Cancel</button>
+      <button class="app-btn app-btn-primary" onclick="saveEditAppt()">Save Changes</button>
+    </div>
+  </div>
+</div>
 <div class="toast-container" id="toastContainer"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/theme.js"></script>
@@ -307,6 +383,7 @@
 <script src="../js/rbac.js"></script>
 <script>
 let apptData   = [];
+let staffList  = [];
 let custList   = [];   // all customers for the booking dropdown
 let vehCache   = {};   // custId → vehicles[]
 
@@ -319,8 +396,9 @@ async function initPage() {
   const [appts, staff, custs] = await Promise.all([
     GS.getAppointments(), GS.getStaff(), GS.getCustomers()
   ]);
-  apptData = appts;
+  apptData  = appts;
   custList  = custs;
+  staffList = staff;
 
   populateCustomerSelect(custs);
   populateTechFilter(staff);
@@ -481,21 +559,28 @@ function renderRequests() {
   if (!tbody) return;
   const pending = apptData.filter(a => a.status === 'Pending');
   if (!pending.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--app-muted)">No pending requests</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--app-muted)">No pending requests</td></tr>';
     return;
   }
-  tbody.innerHTML = pending.map(a => `
-    <tr class="pending-row">
-      <td>${a.customer_name||'—'}</td>
-      <td>${a.service||'—'}</td>
-      <td>${a.vehicle_label||'—'}</td>
-      <td class="td-mono">${a.appt_date||'—'}</td>
-      <td style="color:var(--app-muted);font-size:12px">${a.notes||'—'}</td>
-      <td>
-        <button class="app-btn app-btn-primary app-btn-sm"
-          onclick="confirmAppt('${a.id}')">Confirm</button>
-      </td>
-    </tr>`).join('');
+  tbody.innerHTML = pending.map(a => {
+    const isGuest    = !a.customer_id && a.guest_name;
+    const name       = a.customer_name || a.guest_name || '—';
+    const vehicle    = a.vehicle_label || a.vehicle_info || '—';
+    const contact    = isGuest ? ((a.guest_phone||'') + (a.guest_email ? ' · '+a.guest_email : '') || '—') : (a.notes||'—');
+    const guestBadge = isGuest ? '<span style="font-family:var(--ff-mono);font-size:9px;background:rgba(232,160,32,0.15);color:var(--amber);border:1px solid rgba(232,160,32,0.3);padding:1px 6px;border-radius:10px;margin-left:4px">ONLINE</span>' : '';
+    return '<tr class="pending-row">' +
+      '<td>' + name + guestBadge + '</td>' +
+      '<td>' + (a.service||'—') + '</td>' +
+      '<td>' + vehicle + '</td>' +
+      '<td class="td-mono" style="font-size:11px">' + (a.appt_date||'—') + ' ' + (a.appt_time||'').slice(0,5) + '</td>' +
+      '<td style="color:var(--app-muted);font-size:12px">' + contact + '</td>' +
+      '<td><div style="display:flex;gap:6px">' +
+        '<button class="app-btn app-btn-ghost app-btn-sm" data-id="' + a.id + '" onclick="openEditAppt(this.dataset.id)">Edit</button>' +
+        '<button class="app-btn app-btn-primary app-btn-sm" data-id="' + a.id + '" onclick="confirmAppt(this.dataset.id)">Confirm</button>' +
+        '<button class="app-btn app-btn-ghost app-btn-sm" style="color:var(--danger)" data-id="' + a.id + '" onclick="cancelAppt(this.dataset.id)">Cancel</button>' +
+      '</div></td>' +
+      '</tr>';
+  }).join('');
 }
 
 function updatePendingBadge() {
@@ -508,10 +593,128 @@ function updatePendingBadge() {
 
 async function confirmAppt(id) {
   try {
+    const appt = apptData.find(a => a.id === id);
     await GS.updateAppointment(id, { status: 'Confirmed' });
+    // Auto-create customer if this is a guest booking
+    if (appt && !appt.customer_id && appt.guest_name) {
+      await autoCreateCustomer(appt);
+    }
     Toast.show('Appointment confirmed', 'success');
     await loadAppointments();
   } catch(err) { Toast.show(err.message, 'error'); }
+}
+
+async function autoCreateCustomer(appt) {
+  try {
+    const parts     = (appt.guest_name||'').trim().split(' ');
+    const firstName = parts[0] || 'Guest';
+    const lastName  = parts.slice(1).join(' ') || '-';
+    const phone     = appt.guest_phone || null;
+    const email     = appt.guest_email || null;
+
+    // Check for existing customer with same phone or email
+    let customerId = null;
+    const existing = custList.find(c =>
+      (phone && c.phone === phone) || (email && c.email === email)
+    );
+    if (existing) {
+      customerId = existing.id;
+      Toast.show('Linked to existing customer: ' + existing.first_name + ' ' + existing.last_name, 'info', 3000);
+    } else {
+      const customer = await GS.createCustomer({ first_name: firstName, last_name: lastName, phone, email });
+      customerId = customer.id;
+      // Create vehicle if vehicle_info present
+      if (appt.vehicle_info && customerId) {
+        const vParts = appt.vehicle_info.split(' ');
+        const year   = parseInt(vParts[0]) || null;
+        const make   = vParts[1] || '';
+        const model  = vParts.slice(2).join(' ').split('—')[0].trim() || make;
+        const plate  = appt.vehicle_info.includes('—') ? appt.vehicle_info.split('—')[1].trim() : null;
+        if (make) await GS.createVehicle({ customer_id: customerId, year, make, model, plate });
+      }
+      Toast.show('Customer created: ' + firstName + ' ' + lastName, 'success', 3000);
+    }
+    await GS.updateAppointment(appt.id, { customer_id: customerId });
+  } catch(e) { console.warn('Auto-create customer failed:', e.message); }
+}
+
+function openEditAppt(id) {
+  const a = apptData.find(x => x.id === id);
+  if (!a) return;
+
+  document.getElementById('editApptId').value       = id;
+  document.getElementById('editGuestName').value    = a.guest_name  || a.customer_name || '';
+  document.getElementById('editGuestPhone').value   = a.guest_phone || '';
+  document.getElementById('editGuestEmail').value   = a.guest_email || '';
+  document.getElementById('editVehicleInfo').value  = a.vehicle_info || a.vehicle_label || '';
+  document.getElementById('editNotes').value        = a.notes  || '';
+  document.getElementById('editApptDate').value     = a.appt_date || '';
+  document.getElementById('editApptTime').value     = a.appt_time ? a.appt_time.slice(0,5) : '';
+
+  // Set service dropdown
+  const svcSel = document.getElementById('editService');
+  if (svcSel) {
+    for (let i = 0; i < svcSel.options.length; i++) {
+      if (svcSel.options[i].value === a.service) { svcSel.selectedIndex = i; break; }
+    }
+  }
+
+  // Populate technician dropdown with workload
+  const techSel = document.getElementById('editTechId');
+  if (techSel) {
+    const jobCount = {};
+    apptData.forEach(ap => {
+      if (ap.mechanic_id && ['Confirmed','Pending'].includes(ap.status)) {
+        jobCount[ap.mechanic_id] = (jobCount[ap.mechanic_id]||0) + 1;
+      }
+    });
+    techSel.innerHTML = '<option value="">— Unassigned —</option>' +
+      staffList.map(s => {
+        const cnt   = jobCount[s.id] || 0;
+        const label = s.full_name + (cnt ? ' (' + cnt + ' appt' + (cnt > 1 ? 's' : '') + ')' : ' — Free');
+        return '<option value="' + s.id + '"' + (a.mechanic_id === s.id ? ' selected' : '') + '>' + label + '</option>';
+      }).join('');
+  }
+
+  Modal.open('editApptModal');
+}
+
+async function saveEditAppt() {
+  const id          = document.getElementById('editApptId').value;
+  const guestName   = document.getElementById('editGuestName').value.trim();
+  const guestPhone  = document.getElementById('editGuestPhone').value.trim();
+  const guestEmail  = document.getElementById('editGuestEmail').value.trim();
+  const vehicleInfo = document.getElementById('editVehicleInfo').value.trim();
+  const service     = document.getElementById('editService').value;
+  const notes       = document.getElementById('editNotes').value.trim();
+  const apptDate    = document.getElementById('editApptDate').value;
+  const apptTime    = document.getElementById('editApptTime').value;
+  const techId      = document.getElementById('editTechId').value;
+  const btn         = document.querySelector('#editApptModal .app-btn-primary');
+
+  if (!guestName) { Toast.show('Name is required', 'error'); return; }
+  if (!apptDate)  { Toast.show('Date is required', 'error'); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    await GS.updateAppointment(id, {
+      guest_name:   guestName,
+      guest_phone:  guestPhone  || null,
+      guest_email:  guestEmail  || null,
+      vehicle_info: vehicleInfo || null,
+      service, notes: notes || null,
+      appt_date: apptDate,
+      appt_time: apptTime ? apptTime + ':00' : null,
+      mechanic_id: techId || null,
+    });
+    Toast.show('Appointment updated', 'success');
+    Modal.close('editApptModal');
+    await loadAppointments();
+  } catch(e) {
+    Toast.show(e.message || 'Failed to save', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+  }
 }
 
 async function cancelAppt(id) {

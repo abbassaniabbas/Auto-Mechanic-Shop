@@ -34,12 +34,10 @@ Deno.serve(async (req) => {
     const shopId  = profile.shop_id;
 
     if (isAdmin && shopId) {
-      // Get PO ids and delete purchase_order_items first (FK to inventory)
       const { data: pos } = await adminClient.from('purchase_orders').select('id').eq('shop_id', shopId);
       const poIds = (pos || []).map((p) => p.id);
       if (poIds.length) await adminClient.from('purchase_order_items').delete().in('po_id', poIds);
 
-      // Get WO ids and delete work_order_parts (FK to inventory)
       const { data: wos } = await adminClient.from('work_orders').select('id').eq('shop_id', shopId);
       const woIds = (wos || []).map((w) => w.id);
       if (woIds.length) {
@@ -47,18 +45,32 @@ Deno.serve(async (req) => {
         await adminClient.from('wo_status_history').delete().in('work_order_id', woIds);
       }
 
-      // Delete invoice_payments
       const { data: invs } = await adminClient.from('invoices').select('id').eq('shop_id', shopId);
       const invIds = (invs || []).map((i) => i.id);
       if (invIds.length) await adminClient.from('invoice_payments').delete().in('invoice_id', invIds);
 
-      // Delete other tables
+      await adminClient.from('work_orders').delete().eq('shop_id', shopId);
+      await adminClient.from('invoices').delete().eq('shop_id', shopId);
+      await adminClient.from('appointments').delete().eq('shop_id', shopId);
+
+      const { data: custs } = await adminClient.from('customers').select('id').eq('shop_id', shopId);
+      const custIds = (custs || []).map((c) => c.id);
+      if (custIds.length) await adminClient.from('vehicles').delete().in('customer_id', custIds);
+
+      await adminClient.from('customers').delete().eq('shop_id', shopId);
+      await adminClient.from('purchase_orders').delete().eq('shop_id', shopId);
+      await adminClient.from('inventory').delete().eq('shop_id', shopId);
+      await adminClient.from('suppliers').delete().eq('shop_id', shopId);
+      await adminClient.from('notifications').delete().eq('shop_id', shopId);
       await adminClient.from('staff_invites').delete().eq('shop_id', shopId);
       await adminClient.from('billing_transactions').delete().eq('shop_id', shopId);
+      await adminClient.from('subscriptions').delete().eq('shop_id', shopId);
+      await adminClient.from('shop_settings').delete().eq('shop_id', shopId);
+      await adminClient.from('profiles').delete().eq('shop_id', shopId);
 
-      // Delete shop — cascades the rest
       const { error: shopErr } = await adminClient.from('shops').delete().eq('id', shopId);
       if (shopErr) return new Response(JSON.stringify({ error: 'Failed to delete shop: ' + shopErr.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
     } else {
       await adminClient.from('profiles').delete().eq('id', user.id);
     }
