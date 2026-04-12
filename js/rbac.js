@@ -328,22 +328,13 @@ const RBAC = (() => {
   }
 
   async function deactivateStaff(profileId) {
-    const { data, error } = await sb.from('profiles')
-      .update({ active: false })
-      .eq('id', profileId)
-      .select();
-    if (error) throw error;
-    return data?.[0];
+    // No-op: active column removed from profiles
+    return null;
   }
 
   async function reactivateStaff(profileId) {
-    const user = await getCurrentUser();
-    const { data, error } = await sb.from('profiles')
-      .update({ active: true, shop_id: user?.shop_id })
-      .eq('id', profileId)
-      .select();
-    if (error) throw error;
-    return data?.[0];
+    // No-op: active column removed from profiles
+    return null;
   }
 
   async function getShop() {

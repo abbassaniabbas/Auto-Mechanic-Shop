@@ -106,7 +106,7 @@ const Auth = (() => {
     if (!session) return null;
 
     const { data: rows, error } = await sb.from('profiles')
-      .select('id, full_name, role, email, shop_id, avatar_url, speciality, active')
+      .select('id, full_name, role, email, shop_id, avatar_url, speciality')
       .eq('id', session.user.id)
       .limit(1);
 
@@ -140,7 +140,7 @@ const Auth = (() => {
 
   async function requireAuth() {
     const session = await getSession();
-    if (!session) window.location.href = 'dashboard.html';
+    if (!session) window.location.href = '../app/dashboard.html';
     return session;
   }
 
@@ -972,7 +972,7 @@ const GS = (() => {
   async function getStaff() {
     const sid = await _shopId();
     const { data, error } = await sb.from('profiles')
-      .select('*').eq('shop_id', sid).eq('active', true).order('full_name');
+      .select('*').eq('shop_id', sid).order('full_name');
     if (error) throw error;
     return data;
   }
