@@ -925,17 +925,17 @@ async function doAttachPart() {
   btn.textContent = 'Attaching…';
 
   try {
-    // 1. Add part to work order
-    await GS.addPartToWorkOrder(_attachingWOId, partId, qty, cost);
+    // 1. Add part to work order (increments qty if already attached)
+    const result = await GS.addPartToWorkOrder(_attachingWOId, partId, qty, cost);
 
     // 2. Inventory is decremented automatically by the wo_part_deduct DB trigger
-    //    — no manual adjustStock call needed here.
 
     // 3. Update local inventory cache so dropdown reflects new stock
     const cached = _inventoryData.find(p => p.id === partId);
     if (cached) cached.qty = Math.max(0, stock - qty);
 
-    Toast.show(`${opt.textContent.split(' —')[0]} × ${qty} attached — stock decremented`, 'success');
+    const partName = opt.textContent.split(' —')[0];
+    Toast.show(`${partName} × ${qty} attached ✓`, 'success');
     Modal.close('attachPartModal');
 
     // Refresh WO detail if open
@@ -943,7 +943,13 @@ async function doAttachPart() {
       await openWODetail(_attachingWOId);
     }
   } catch(err) {
-    Toast.show(err.message || 'Failed to attach part', 'error');
+    // Give a clean message instead of the raw DB constraint error
+    const msg = err.message || '';
+    if (msg.includes('unique') || msg.includes('duplicate') || msg.includes('constraint')) {
+      Toast.show('This part is already attached. Adjust the quantity from the work order instead.', 'error', 5000);
+    } else {
+      Toast.show(msg || 'Failed to attach part', 'error');
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = 'Attach & Deduct Stock';

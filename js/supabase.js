@@ -2,25 +2,11 @@
    GEARSHIFT — SUPABASE.JS
    Multi-tenant data layer — every query is scoped to the
    current user's shop_id so shops never see each other's data.
-
-   HOW TO USE:
-   1. Create a free project at https://supabase.com
-   2. Run supabase_schema.sql in SQL Editor
-   3. Copy your Project URL + anon key below
-   4. In every HTML page replace data.js with:
-        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-        <script src="../js/supabase.js"></script>
    ================================================================= */
 
-/* -----------------------------------------------------------------
-   ⚙️  CONFIGURATION — replace these two values
-   ----------------------------------------------------------------- */
 const SUPABASE_URL  = 'https://tqwwnmgcvaqeigpodirc.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxd3dubWdjdmFxZWlncG9kaXJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0Nzg5ODEsImV4cCI6MjA4ODA1NDk4MX0.mP5RNZ0Tu7ckrDkjCmrVcbnaMJ2Sf7QfuGCslElGLo0';
 
-/* -----------------------------------------------------------------
-   CLIENT  (global `sb`)
-   ----------------------------------------------------------------- */
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {
@@ -31,28 +17,19 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
 });
 
 /* =================================================================
-   SHOP CONTEXT  — cached shop_id for the current session.
-   Every GS query calls _shopId() to scope its results.
-   Cache is cleared on sign-out so switching accounts works cleanly.
+   SHOP CONTEXT
    ================================================================= */
 let _cachedShopId = null;
 
 async function _shopId() {
   if (_cachedShopId) return _cachedShopId;
-
   const { data: { user: authUser } } = await sb.auth.getUser();
   if (!authUser) throw new Error('Not authenticated');
-
   const { data: rows, error } = await sb.from('profiles')
-    .select('shop_id')
-    .eq('id', authUser.id)
-    .limit(1);
-
+    .select('shop_id').eq('id', authUser.id).limit(1);
   if (error || !rows?.length) throw new Error('Could not resolve shop for current user');
-
   const shopId = rows[0].shop_id;
   if (!shopId) throw new Error('Your account is not linked to a shop yet. Please complete registration.');
-
   _cachedShopId = shopId;
   return _cachedShopId;
 }
@@ -88,7 +65,7 @@ const Auth = (() => {
       options: { data: { full_name: fullName, role } }
     });
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function signOut() {
@@ -104,12 +81,9 @@ const Auth = (() => {
   async function getUser() {
     const session = await getSession();
     if (!session) return null;
-
     const { data: rows, error } = await sb.from('profiles')
-      .select('id, full_name, role, email, shop_id, avatar_url, speciality')
-      .eq('id', session.user.id)
-      .limit(1);
-
+      .select('id, full_name, role, email, shop_id, avatar_url, speciality, active')
+      .eq('id', session.user.id).limit(1);
     const profile = rows?.[0] || null;
     if (error || !profile) {
       return {
@@ -120,14 +94,12 @@ const Auth = (() => {
         email: session.user.email,
       };
     }
-
     if (profile.shop_id) {
-      _cachedShopId = profile.shop_id; // prime cache
+      _cachedShopId = profile.shop_id;
       const { data: shop } = await sb.from('shops')
         .select('name').eq('id', profile.shop_id).single();
       profile.shop_name = shop?.name || null;
     }
-
     return profile;
   }
 
@@ -140,7 +112,7 @@ const Auth = (() => {
 
   async function requireAuth() {
     const session = await getSession();
-    if (!session) window.location.href = 'dashboard.html';
+    if (!session) window.location.href = '../app/dashboard.html';
     return session;
   }
 
@@ -168,19 +140,18 @@ const Auth = (() => {
 })();
 
 /* =================================================================
-   REALTIME MODULE — subscriptions filtered to current shop
+   REALTIME MODULE
    ================================================================= */
 const Realtime = (() => {
   const channels = {};
 
   async function subscribe(table, { onInsert, onUpdate, onDelete } = {}) {
     const name = `realtime:${table}:${Date.now()}`;
-
     let shopFilter = null;
     try {
       const sid = await _shopId();
       if (sid) shopFilter = `shop_id=eq.${sid}`;
-    } catch(e) { /* no shop yet — RLS will cover us */ }
+    } catch(e) {}
 
     const baseOpts = shopFilter
       ? { schema: 'public', table, filter: shopFilter }
@@ -206,7 +177,7 @@ const Realtime = (() => {
 })();
 
 /* =================================================================
-   FORMAT HELPER  (used by getDashboardKPIs)
+   FORMAT HELPER
    ================================================================= */
 function formatCurrency(amount) {
   return '\u20a6' + Number(amount || 0).toLocaleString('en-NG', {
@@ -215,8 +186,7 @@ function formatCurrency(amount) {
 }
 
 /* =================================================================
-   DATA MODULE  — every read filtered by shop_id,
-                  every write injects shop_id
+   DATA MODULE
    ================================================================= */
 const GS = (() => {
 
@@ -228,16 +198,15 @@ const GS = (() => {
     const { data, error } = await sb.from('customers')
       .select('*').eq('shop_id', sid).order('last_name');
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function getCustomer(id) {
     const sid = await _shopId();
     const { data, error } = await sb.from('customers')
-      .select('*, vehicles(*)')
-      .eq('id', id).eq('shop_id', sid).single();
+      .select('*, vehicles(*)').eq('id', id).eq('shop_id', sid).single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function createCustomer(payload) {
@@ -245,7 +214,7 @@ const GS = (() => {
     const { data, error } = await sb.from('customers')
       .insert({ ...payload, shop_id: sid }).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function updateCustomer(id, payload) {
@@ -266,15 +235,9 @@ const GS = (() => {
 
   async function deleteCustomer(id) {
     const sid = await _shopId();
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      await sb.from('audit_logs').insert({
-        table_name: 'customers', record_id: id, action: 'DELETE',
-        changed_by: session?.user?.id || null, changes: null,
-      });
-    } catch(e) {}
-    const { error } = await sb.from('customers')
-      .delete().eq('id', id).eq('shop_id', sid);
+    const { error } = await sb.rpc('delete_customer_cascade', {
+      p_customer_id: id, p_shop_id: sid,
+    });
     if (error) throw error;
   }
 
@@ -295,11 +258,10 @@ const GS = (() => {
   }
 
   /* ---------------------------------------------------------------
-     VEHICLES  (belong to customers who belong to the shop)
+     VEHICLES
      --------------------------------------------------------------- */
   async function getVehicles(customerId = null) {
     const sid = await _shopId();
-    // Join through customers to scope to this shop
     let q = sb.from('vehicles')
       .select('*, customers!inner(id, first_name, last_name, shop_id)')
       .eq('customers.shop_id', sid)
@@ -307,7 +269,7 @@ const GS = (() => {
     if (customerId) q = q.eq('customer_id', customerId);
     const { data, error } = await q;
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function createVehicle(payload) {
@@ -325,8 +287,7 @@ const GS = (() => {
 
   async function updateVehicle(id, payload) {
     const { data, error } = await sb.from('vehicles')
-      .update({ ...payload, updated_at: new Date().toISOString() })
-      .eq('id', id).select();
+      .update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id).select();
     if (error) throw error;
     try {
       const { data: { session } } = await sb.auth.getSession();
@@ -405,7 +366,7 @@ const GS = (() => {
     const partIds = parts.map(p => p.part_id).filter(Boolean);
     let invMap = {};
     if (partIds.length) {
-      const { data: inv } = await sb.from('inventory').select('id,name,sku,cost').in('id', partIds);
+      const { data: inv } = await sb.from('inventory').select('id,name,sku,unit_cost').in('id', partIds);
       (inv||[]).forEach(i => { invMap[i.id] = i; });
     }
     return {
@@ -423,25 +384,7 @@ const GS = (() => {
     const { data, error } = await sb.from('work_orders')
       .insert({ ...payload, shop_id: sid, status: 'Open', ref: '' }).select();
     if (error) throw error;
-    const wo = data?.[0];
-    if (wo && payload.mechanic_id) {
-      try {
-        const [custRes, vehRes] = await Promise.all([
-          payload.customer_id ? sb.from('customers').select('first_name,last_name').eq('id', payload.customer_id).single() : { data: null },
-          payload.vehicle_id  ? sb.from('vehicles').select('year,make,model').eq('id', payload.vehicle_id).single()        : { data: null },
-        ]);
-        const custName = custRes.data ? custRes.data.first_name + ' ' + custRes.data.last_name : 'a customer';
-        const vehLabel = vehRes.data  ? ((vehRes.data.year||'') + ' ' + vehRes.data.make + ' ' + vehRes.data.model).trim() : 'a vehicle';
-        await createNotification({
-          type: 'wo_update',
-          title: 'New Work Order Assigned -- ' + (wo.ref || ''),
-          body: 'You have been assigned a new job. Customer: ' + custName + '. Vehicle: ' + vehLabel + '. Fault: ' + (payload.fault || 'See work order') + '.',
-          related_id: wo.id, related_type: 'work_order',
-          for_user_id: payload.mechanic_id,
-        });
-      } catch(e) { console.warn('WO assignment notification failed:', e.message); }
-    }
-    return wo;
+    return data?.[0];
   }
 
   async function updateWorkOrder(id, payload) {
@@ -456,6 +399,7 @@ const GS = (() => {
     const wo = data?.[0];
 
     if (payload.status) {
+      // Status history
       try {
         const { data: { session } } = await sb.auth.getSession();
         await sb.from('wo_status_history').insert({
@@ -464,6 +408,7 @@ const GS = (() => {
         });
       } catch(e) { console.warn('Status history write failed:', e); }
 
+      // Status notification
       try {
         const statusLabels = {
           'In Progress':    'Work has started on your vehicle',
@@ -480,6 +425,17 @@ const GS = (() => {
           });
         }
       } catch(e) { console.warn('Status notification failed:', e); }
+
+      // Auto-generate invoice when completed
+      if (payload.status === 'Completed') {
+        try {
+          await generateInvoiceFromWO(id);
+        } catch(e) {
+          if (!e.message?.includes('already exists')) {
+            console.warn('Auto-invoice generation failed:', e.message);
+          }
+        }
+      }
     }
     return wo;
   }
@@ -501,34 +457,36 @@ const GS = (() => {
   }
 
   async function addPartToWorkOrder(workOrderId, partId, qty, unitCost) {
+    // Check if this part is already attached to this work order
+    const { data: existing } = await sb.from('work_order_parts')
+      .select('id, qty')
+      .eq('work_order_id', workOrderId)
+      .eq('part_id', partId)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      // Part already attached — increment the quantity instead of inserting
+      const newQty = (existing[0].qty || 0) + qty;
+      const { data, error } = await sb.from('work_order_parts')
+        .update({ qty: newQty, unit_cost: unitCost })
+        .eq('id', existing[0].id)
+        .select().limit(1);
+      if (error) throw error;
+      return data?.[0];
+    }
+
+    // Part not yet attached — insert fresh row
     const { data, error } = await sb.from('work_order_parts')
       .insert({ work_order_id: workOrderId, part_id: partId, qty, unit_cost: unitCost })
-      .select().single();
+      .select().limit(1);
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data?.[0];
   }
 
   async function removePartFromWorkOrder(workOrderId, partId) {
     const { error } = await sb.from('work_order_parts')
       .delete().eq('work_order_id', workOrderId).eq('part_id', partId);
     if (error) throw error;
-  }
-
-  // Returns ALL work_order_parts for this shop — used by reports/turnover
-  async function getAllWorkOrderParts() {
-    const sid = await _shopId();
-    const { data: woRows, error: woErr } = await sb.from('work_orders')
-      .select('id, created_at').eq('shop_id', sid);
-    if (woErr) throw woErr;
-    if (!woRows?.length) return [];
-    const woIds = woRows.map(w => w.id);
-    const woDateMap = Object.fromEntries(woRows.map(w => [w.id, w.created_at]));
-    const { data, error } = await sb.from('work_order_parts')
-      .select('work_order_id, part_id, qty, unit_cost')
-      .in('work_order_id', woIds);
-    if (error) throw error;
-    // Attach the WO date so reports can filter by date range
-    return (data || []).map(p => ({ ...p, wo_date: woDateMap[p.work_order_id] || null }));
   }
 
   /* ---------------------------------------------------------------
@@ -553,7 +511,7 @@ const GS = (() => {
     const { data, error } = await sb.from('inventory')
       .select('*').eq('id', id).eq('shop_id', sid).single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function createInventoryItem(payload) {
@@ -561,7 +519,7 @@ const GS = (() => {
     const { data, error } = await sb.from('inventory')
       .insert({ ...payload, shop_id: sid }).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function updateInventoryItem(id, payload) {
@@ -570,7 +528,7 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function adjustStock(id, delta, reason = '') {
@@ -578,7 +536,7 @@ const GS = (() => {
       p_part_id: id, p_delta: delta, p_reason: reason,
     });
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function getLowStockItems() {
@@ -597,7 +555,7 @@ const GS = (() => {
     const { data, error } = await sb.from('suppliers')
       .select('*').eq('shop_id', sid).order('name');
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function createSupplier(payload) {
@@ -605,7 +563,7 @@ const GS = (() => {
     const { data, error } = await sb.from('suppliers')
       .insert({ ...payload, shop_id: sid }).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function updateSupplier(id, payload) {
@@ -613,7 +571,7 @@ const GS = (() => {
     const { data, error } = await sb.from('suppliers')
       .update(payload).eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   /* ---------------------------------------------------------------
@@ -622,32 +580,29 @@ const GS = (() => {
   async function getPurchaseOrders() {
     const sid = await _shopId();
     const { data, error } = await sb.from('purchase_orders')
-      .select('*, suppliers(id,name,phone,email), purchase_order_items(*, inventory:part_id(id,name,sku))') 
+      .select('*, suppliers(name), purchase_order_items(*, inventory:part_id(id,name,sku))')
       .eq('shop_id', sid).order('created_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function createPurchaseOrder(supplierId, items, notes = '', expectedAt = null) {
     const sid = await _shopId();
     const poPayload = { supplier_id: supplierId, notes: notes || null, ref: '', shop_id: sid };
     if (expectedAt) poPayload.expected_at = expectedAt;
-
     const { data: po, error: poErr } = await sb.from('purchase_orders')
       .insert(poPayload).select().single();
     if (poErr) throw poErr;
-
     const poItems = items.map(i => ({
       po_id:     po.id,
       part_id:   i.part_id || i.inventory_id || i.partId,
       qty:       i.qty || i.qty_ordered || 1,
-      unit_cost: i.unit_cost ?? i.cost ?? i.unitCost ?? 0,
+      unit_cost: i.unit_cost ?? i.unitCost ?? 0,
     }));
     const { error: itemErr } = await sb.from('purchase_order_items').insert(poItems);
     if (itemErr) throw itemErr;
-
     const { data: full } = await sb.from('purchase_orders')
-      .select('*, suppliers(id,name,phone,email), purchase_order_items(*, inventory:part_id(name,sku))') 
+      .select('*, suppliers(name), purchase_order_items(*, inventory:part_id(name,sku))')
       .eq('id', po.id).single();
     return full || po;
   }
@@ -659,16 +614,12 @@ const GS = (() => {
     const { data, error } = await sb.from('purchase_orders')
       .update(updates).eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function receivePOItem(poItemId, qtyReceived) {
-    const { data: current, error: fetchErr } = await sb.from('purchase_order_items')
-      .select('qty_received, qty').eq('id', poItemId).single();
-    if (fetchErr) throw fetchErr;
-    const newTotal = Math.min((current?.qty_received || 0) + qtyReceived, current?.qty || 0);
     const { data, error } = await sb.from('purchase_order_items')
-      .update({ qty_received: newTotal }).eq('id', poItemId).select().single();
+      .update({ qty_received: qtyReceived }).eq('id', poItemId).select().single();
     if (error) throw error;
     return data;
   }
@@ -678,25 +629,98 @@ const GS = (() => {
      --------------------------------------------------------------- */
   async function getInvoices(filters = {}) {
     const sid = await _shopId();
-
-    // Step 1: get IDs scoped to this shop from the base table
-    let baseQ = sb.from('invoices')
-      .select('id').eq('shop_id', sid);
-    if (filters.status)      baseQ = baseQ.eq('status', filters.status);
-    if (filters.customer_id) baseQ = baseQ.eq('customer_id', filters.customer_id);
-    const { data: baseRows, error: baseErr } = await baseQ;
-    if (baseErr) throw baseErr;
-    if (!baseRows?.length) return [];
-
-    // Step 2: query the view (which has customer_name, customer_email, wo_ref, total)
-    // filtered to only IDs belonging to this shop
-    const ids = baseRows.map(r => r.id);
-    const { data, error } = await sb.from('v_invoices')
-      .select('*')
-      .in('id', ids)
+    let q = sb.from('invoices')
+      .select('*').eq('shop_id', sid)
       .order('created_at', { ascending: false });
+    if (filters.status)      q = q.eq('status', filters.status);
+    if (filters.customer_id) q = q.eq('customer_id', filters.customer_id);
+    const { data, error } = await q;
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
+  }
+
+  async function getInvoiceFull(invoiceId) {
+    const sid = await _shopId();
+    const { data, error } = await sb.from('invoices')
+      .select('*').eq('id', invoiceId).eq('shop_id', sid).single();
+    if (error) throw error;
+
+    // Load work order parts if linked
+    let parts = [];
+    if (data.work_order_id) {
+      const { data: woParts } = await sb.from('work_order_parts')
+        .select('qty, unit_cost, part_id').eq('work_order_id', data.work_order_id);
+      if (woParts?.length) {
+        const partIds = woParts.map(p => p.part_id).filter(Boolean);
+        let invMap = {};
+        if (partIds.length) {
+          const { data: inv } = await sb.from('inventory').select('id,name,sku').in('id', partIds);
+          (inv || []).forEach(i => { invMap[i.id] = i; });
+        }
+        parts = woParts.map(p => ({
+          ...p,
+          name: invMap[p.part_id]?.name || '—',
+          sku:  invMap[p.part_id]?.sku  || '',
+        }));
+      }
+    }
+
+    // Load shop info
+    let shopInfo = null;
+    try {
+      const { data: s } = await sb.from('shops')
+        .select('name,phone,email,address').eq('id', sid).single();
+      shopInfo = s;
+    } catch(e) {}
+
+    const settings = await getSettings();
+    return { ...data, parts, shop: shopInfo, settings };
+  }
+
+  async function generateInvoiceFromWO(workOrderId) {
+    const sid = await _shopId();
+
+    // Check for existing invoice
+    const { data: existing } = await sb.from('invoices')
+      .select('id,ref').eq('work_order_id', workOrderId).eq('shop_id', sid).limit(1);
+    if (existing?.length) {
+      throw new Error(`Invoice ${existing[0].ref || ''} already exists for this work order`.trim());
+    }
+
+    // Load work order with parts
+    const wo = await getWorkOrder(workOrderId);
+    if (!wo) throw new Error('Work order not found');
+    if (wo.status !== 'Completed') throw new Error('Work order must be Completed before generating an invoice');
+
+    // Load settings for rates
+    const settings = await getSettings();
+    const laborRate = parseFloat(settings?.labor_rate || 0);
+    const taxRate   = parseFloat(settings?.tax_rate   || 0) / 100;
+
+    // Calculate
+    const laborAmount = Math.round((wo.labor_hours || 0) * laborRate * 100) / 100;
+    const partsAmount = Math.round(
+      (wo.parts || []).reduce((sum, p) => sum + ((p.unit_cost || p.inventory?.unit_cost || 0) * p.qty), 0) * 100
+    ) / 100;
+    const taxAmount   = Math.round((laborAmount + partsAmount) * taxRate * 100) / 100;
+    const totalAmount = Math.round((laborAmount + partsAmount + taxAmount) * 100) / 100;
+
+    // Insert invoice
+    const { data, error } = await sb.from('invoices').insert({
+      shop_id:       sid,
+      work_order_id: workOrderId,
+      wo_ref:        wo.ref        || null,
+      customer_id:   wo.customer_id || null,
+      customer_name: wo.customer_name || null,
+      status:        'Unpaid',
+      labor_amount:  laborAmount,
+      parts_amount:  partsAmount,
+      tax_amount:    taxAmount,
+      total_amount:  totalAmount,
+      ref:           '',
+    }).select().single();
+    if (error) throw error;
+    return data;
   }
 
   async function createInvoice(payload) {
@@ -704,46 +728,7 @@ const GS = (() => {
     const { data, error } = await sb.from('invoices')
       .insert({ ...payload, shop_id: sid, ref: '' }).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
-  }
-
-  async function generateInvoiceFromWO(workOrderId) {
-    const sid = await _shopId();
-    const [woRes, settingsRes] = await Promise.all([
-      sb.from('work_orders').select('*, customers(id,first_name,last_name), work_order_parts(id,qty,unit_cost,part_id,inventory:part_id(name))').eq('id', workOrderId).single(),
-      sb.from('shop_settings').select('labor_rate,tax_rate,invoice_prefix').eq('shop_id', sid).single(),
-    ]);
-    if (woRes.error) throw new Error('Work order not found');
-    const wo = woRes.data;
-    const settings = settingsRes.data || {};
-    const laborRate   = parseFloat(settings.labor_rate || 0);
-    const taxRate     = parseFloat(settings.tax_rate   || 0) / 100;
-    const laborAmount = Math.round((wo.labor_hours || 0) * laborRate * 100) / 100;
-    const partsAmount = Math.round((wo.work_order_parts || []).reduce((s, p) => s + (p.unit_cost || 0) * (p.qty || 0), 0) * 100) / 100;
-    const taxAmount   = Math.round((laborAmount + partsAmount) * taxRate * 100) / 100;
-    const total       = laborAmount + partsAmount + taxAmount;
-    const { data: inv, error: invErr } = await sb.from('invoices').insert({
-      shop_id: sid, work_order_id: workOrderId, customer_id: wo.customer_id,
-      ref: '', status: 'Unpaid', invoice_date: new Date().toISOString().split('T')[0],
-      labor_amount: laborAmount, parts_amount: partsAmount, tax_amount: taxAmount, total_amount: total,
-    }).select().single();
-    if (invErr) throw invErr;
-    return inv;
-  }
-
-  async function getInvoiceFull(invoiceId) {
-    const sid = await _shopId();
-    const { data: viewData } = await sb.from('v_invoices').select('*').eq('id', invoiceId).single();
-    if (viewData) return { ...viewData, total_amount: viewData.total_amount ?? viewData.total ?? 0 };
-    const { data: inv, error } = await sb.from('invoices').select('*, customers(id,first_name,last_name), work_orders(ref,fault,labor_hours)').eq('id', invoiceId).eq('shop_id', sid).single();
-    if (error) throw error;
-    let parts = [];
-    if (inv.work_order_id) {
-      const { data: woParts } = await sb.from('work_order_parts').select('qty, unit_cost, inventory:part_id(name,sku)').eq('work_order_id', inv.work_order_id);
-      parts = (woParts || []).map(p => ({ name: p.inventory?.name || '—', sku: p.inventory?.sku || '', qty: p.qty, unit_cost: p.unit_cost }));
-    }
-    const { data: shop } = await sb.from('shops').select('name,phone,email,address').eq('id', sid).single();
-    return { ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, customer_name: inv.customers ? inv.customers.first_name + ' ' + inv.customers.last_name : '—', wo_ref: inv.work_orders?.ref || '—', parts, shop: shop || {} };
+    return data;
   }
 
   async function markInvoicePaid(id, method = 'Card') {
@@ -755,7 +740,7 @@ const GS = (() => {
       })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function updateInvoiceStatus(id, status) {
@@ -764,7 +749,7 @@ const GS = (() => {
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   /* ---------------------------------------------------------------
@@ -772,38 +757,14 @@ const GS = (() => {
      --------------------------------------------------------------- */
   async function getAppointments(filters = {}) {
     const sid = await _shopId();
-
-    // Step 1: get base data including guest columns from the base table
-    let baseQ = sb.from('appointments')
-      .select('id, guest_name, guest_phone, guest_email, vehicle_info, customer_id')
-      .eq('shop_id', sid);
-    if (filters.upcoming)    baseQ = baseQ.gte('appt_date', new Date().toISOString().split('T')[0]);
-    if (filters.mechanic_id) baseQ = baseQ.eq('mechanic_id', filters.mechanic_id);
-    const { data: baseRows, error: baseErr } = await baseQ;
-    if (baseErr) throw baseErr;
-    if (!baseRows?.length) return [];
-
-    // Build a map of id → guest fields for merging
-    const guestMap = {};
-    baseRows.forEach(r => {
-      guestMap[r.id] = {
-        guest_name:   r.guest_name,
-        guest_phone:  r.guest_phone,
-        guest_email:  r.guest_email,
-        vehicle_info: r.vehicle_info,
-      };
-    });
-
-    // Step 2: query the view for enriched data (customer_name, vehicle_label, mechanic_name)
-    const ids = baseRows.map(r => r.id);
-    const { data, error } = await sb.from('v_appointments')
-      .select('*')
-      .in('id', ids)
+    let q = sb.from('appointments')
+      .select('*').eq('shop_id', sid)
       .order('appt_date').order('appt_time');
+    if (filters.upcoming)    q = q.gte('appt_date', new Date().toISOString().split('T')[0]);
+    if (filters.mechanic_id) q = q.eq('mechanic_id', filters.mechanic_id);
+    const { data, error } = await q;
     if (error) throw error;
-
-    // Step 3: merge guest fields back in — these aren't in the view
-    return (data || []).map(a => ({ ...guestMap[a.id], ...a }));
+    return data;
   }
 
   async function createAppointment(payload) {
@@ -811,7 +772,7 @@ const GS = (() => {
     const { data, error } = await sb.from('appointments')
       .insert({ ...payload, shop_id: sid, ref: '' }).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function updateAppointment(id, payload) {
@@ -820,7 +781,7 @@ const GS = (() => {
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id).eq('shop_id', sid).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function cancelAppointment(id) {
@@ -839,7 +800,6 @@ const GS = (() => {
         body:         payload.body,
         related_id:   payload.related_id   || null,
         related_type: payload.related_type || null,
-        for_user_id:  payload.for_user_id  || null,
         shop_id:      sid,
         read:         false,
       });
@@ -849,26 +809,20 @@ const GS = (() => {
 
   async function getNotifications(unreadOnly = false) {
     const sid = await _shopId();
-    const { data: { user: authUser } } = await sb.auth.getUser();
-    const uid = authUser?.id || null;
     let q = sb.from('notifications')
       .select('*').eq('shop_id', sid)
-      .or('for_user_id.is.null,for_user_id.eq.' + uid)
       .order('created_at', { ascending: false });
     if (unreadOnly) q = q.eq('read', false);
     const { data, error } = await q;
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function getUnreadCount() {
     const sid = await _shopId();
-    const { data: { user: authUser } } = await sb.auth.getUser();
-    const uid = authUser?.id || null;
     const { count, error } = await sb.from('notifications')
       .select('*', { count: 'exact', head: true })
-      .eq('shop_id', sid).eq('read', false)
-      .or('for_user_id.is.null,for_user_id.eq.' + uid);
+      .eq('shop_id', sid).eq('read', false);
     if (error) return 0;
     return count || 0;
   }
@@ -904,7 +858,7 @@ const GS = (() => {
   }
 
   /* ---------------------------------------------------------------
-     DASHBOARD KPIs  — computed directly, always shop-scoped
+     DASHBOARD KPIs
      --------------------------------------------------------------- */
   async function getDashboardKPIs() {
     const sid   = await _shopId();
@@ -912,25 +866,14 @@ const GS = (() => {
     const month = now.slice(0, 7);
 
     const [wosRes, invItemsRes, apptRes, invRes, notifRes] = await Promise.allSettled([
-      sb.from('work_orders')
-        .select('id', { count: 'exact', head: true })
-        .eq('shop_id', sid)
-        .in('status', ['Open', 'In Progress', 'Awaiting Parts']),
-      sb.from('inventory')
-        .select('id, qty, threshold')
-        .eq('shop_id', sid),
-      sb.from('appointments')
-        .select('id', { count: 'exact', head: true })
-        .eq('shop_id', sid)
-        .gte('appt_date', now),
-      // Use base table — total = labor_amount + parts_amount + tax_amount
-      sb.from('invoices')
-        .select('labor_amount, parts_amount, tax_amount, paid_at, status')
-        .eq('shop_id', sid),
-      sb.from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('shop_id', sid)
-        .eq('read', false),
+      sb.from('work_orders').select('id', { count: 'exact', head: true })
+        .eq('shop_id', sid).in('status', ['Open', 'In Progress', 'Awaiting Parts']),
+      sb.from('inventory').select('id, qty, threshold').eq('shop_id', sid),
+      sb.from('appointments').select('id', { count: 'exact', head: true })
+        .eq('shop_id', sid).gte('appt_date', now),
+      sb.from('invoices').select('total_amount, paid_at, status').eq('shop_id', sid),
+      sb.from('notifications').select('id', { count: 'exact', head: true })
+        .eq('shop_id', sid).eq('read', false),
     ]);
 
     const activeWOs     = wosRes.status     === 'fulfilled' ? (wosRes.value.count     || 0) : 0;
@@ -945,7 +888,7 @@ const GS = (() => {
       const invoices = invRes.value.data || [];
       revenueThisMonth = invoices
         .filter(i => i.status === 'Paid' && i.paid_at?.startsWith(month))
-        .reduce((s, i) => s + (Number(i.labor_amount) || 0) + (Number(i.parts_amount) || 0) + (Number(i.tax_amount) || 0), 0);
+        .reduce((s, i) => s + (Number(i.total_amount) || 0), 0);
       unpaidInvoices = invoices.filter(i => ['Unpaid', 'Overdue'].includes(i.status)).length;
     }
 
@@ -984,24 +927,17 @@ const GS = (() => {
       days.push(d.toISOString().split('T')[0]);
     }
     const since = days[0] + 'T00:00:00.000Z';
-
     const { data, error } = await sb.from('invoices')
-      .select('paid_at, labor_amount, parts_amount, tax_amount')
+      .select('paid_at, total_amount')
       .eq('shop_id', sid).eq('status', 'Paid')
       .gte('paid_at', since).not('paid_at', 'is', null);
     if (error) throw error;
-
     const byDay = {};
     days.forEach(d => { byDay[d] = 0; });
     (data || []).forEach(inv => {
       const day = inv.paid_at.split('T')[0];
-      if (byDay[day] !== undefined) {
-        byDay[day] += (Number(inv.labor_amount) || 0)
-                    + (Number(inv.parts_amount) || 0)
-                    + (Number(inv.tax_amount)   || 0);
-      }
+      if (byDay[day] !== undefined) byDay[day] += Number(inv.total_amount) || 0;
     });
-
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return days.map(d => ({
       label: dayNames[new Date(d + 'T12:00:00').getDay()],
@@ -1010,21 +946,21 @@ const GS = (() => {
   }
 
   /* ---------------------------------------------------------------
-     STAFF  — only staff belonging to this shop
+     STAFF
      --------------------------------------------------------------- */
   async function getStaff() {
     const sid = await _shopId();
     const { data, error } = await sb.from('profiles')
-      .select('*').eq('shop_id', sid).order('full_name');
+      .select('*').eq('shop_id', sid).eq('active', true).order('full_name');
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   async function updateProfile(id, payload) {
     const { data, error } = await sb.from('profiles')
       .update(payload).eq('id', id).select().single();
     if (error) throw error;
-    return (data || []).map(inv => ({ ...inv, total_amount: inv.total_amount ?? inv.total ?? 0, shop_id: sid }));
+    return data;
   }
 
   /* ---------------------------------------------------------------
@@ -1056,18 +992,91 @@ const GS = (() => {
   }
 
   /* ---------------------------------------------------------------
+     WHATSAPP
+     --------------------------------------------------------------- */
+  function normaliseNGPhone(raw) {
+    if (!raw) return null;
+    let p = String(raw).replace(/[\s\-().+]/g, '');
+    if (p.startsWith('00234'))     p = '234' + p.slice(5);
+    else if (p.startsWith('+234')) p = '234' + p.slice(4);
+    else if (p.startsWith('0'))    p = '234' + p.slice(1);
+    return /^234\d{10}$/.test(p) ? p : null;
+  }
+
+  async function buildCompletionWhatsApp(workOrderId) {
+    const sid = await _shopId();
+    const [woRes, shopRes] = await Promise.all([
+      sb.from('work_orders').select('id,ref,fault,customer_id,vehicle_id')
+        .eq('id', workOrderId).eq('shop_id', sid).limit(1),
+      sb.from('shops').select('name,phone').eq('id', sid).limit(1),
+    ]);
+    const wo   = woRes.data?.[0];
+    const shop = shopRes.data?.[0];
+    if (!wo) throw new Error('Work order not found');
+
+    const [custRes, vehRes] = await Promise.all([
+      wo.customer_id
+        ? sb.from('customers').select('first_name,last_name,phone').eq('id', wo.customer_id).limit(1)
+        : { data: [] },
+      wo.vehicle_id
+        ? sb.from('vehicles').select('year,make,model').eq('id', wo.vehicle_id).limit(1)
+        : { data: [] },
+    ]);
+
+    const cust = custRes.data?.[0];
+    const veh  = vehRes.data?.[0];
+    if (!cust?.phone) throw new Error('Customer has no phone number on file');
+    const intlPhone = normaliseNGPhone(cust.phone);
+    if (!intlPhone) throw new Error('Phone number "' + cust.phone + '" could not be formatted for WhatsApp. Ensure it is a valid Nigerian number.');
+
+    const vehicleStr = veh ? (veh.year || '') + ' ' + veh.make + ' ' + veh.model : 'your vehicle';
+    const shopName   = shop?.name || 'GearShift Auto';
+    const firstName  = cust.first_name || 'Customer';
+
+    const message =
+      'Hello ' + firstName + ' \uD83D\uDC4B,\n\n'
+      + 'Great news! Your *' + vehicleStr.trim() + '* is ready for pickup at *' + shopName + '* \uD83C\uDF89\n\n'
+      + '*Work completed:*\n'
+      + (wo.fault || 'Service complete') + '\n\n'
+      + 'Please come in at your earliest convenience to collect your vehicle and settle your invoice. '
+      + 'If you have any questions feel free to reply to this message.\n\n'
+      + 'Thank you for choosing ' + shopName + '! \uD83D\uDD27\n\n'
+      + '\u2014 ' + shopName + ' Team';
+
+    return {
+      phone:        cust.phone,
+      intlPhone,
+      waUrl:        'https://wa.me/' + intlPhone + '?text=' + encodeURIComponent(message),
+      message,
+      customerName: (firstName + ' ' + (cust.last_name || '')).trim(),
+      vehicleStr:   vehicleStr.trim(),
+      shopName,
+      woRef:        wo.ref || workOrderId,
+    };
+  }
+
+  async function markCustomerNotified(workOrderId) {
+    const sid = await _shopId();
+    const { error } = await sb.from('work_orders')
+      .update({ customer_notified_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', workOrderId).eq('shop_id', sid);
+    if (error) throw error;
+  }
+
+  /* ---------------------------------------------------------------
      PUBLIC API
      --------------------------------------------------------------- */
   return {
     getCustomers, getCustomer, createCustomer, updateCustomer, deleteCustomer, getAuditLog,
     getVehicles, createVehicle, updateVehicle, deleteVehicle,
     getWorkOrders, getWorkOrder, createWorkOrder, updateWorkOrder, getWOStatusHistory,
-    addPartToWorkOrder, removePartFromWorkOrder, getAllWorkOrderParts,
+    addPartToWorkOrder, removePartFromWorkOrder,
     getInventory, getInventoryItem, createInventoryItem, updateInventoryItem,
     adjustStock, getLowStockItems,
     getSuppliers, createSupplier, updateSupplier,
     getPurchaseOrders, createPurchaseOrder, updatePOStatus, receivePOItem,
-    getInvoices, createInvoice, generateInvoiceFromWO, getInvoiceFull, markInvoicePaid, updateInvoiceStatus,
+    getInvoices, getInvoiceFull, generateInvoiceFromWO, createInvoice,
+    markInvoicePaid, updateInvoiceStatus,
     getAppointments, createAppointment, updateAppointment, cancelAppointment,
     createNotification, getNotifications, getUnreadCount, markNotificationRead,
     markAllNotificationsRead, deleteNotification, clearReadNotifications,
@@ -1075,6 +1084,7 @@ const GS = (() => {
     getRevenueMonthly, getRevenueWeekly,
     getStaff, updateProfile,
     getSettings, updateSettings,
+    buildCompletionWhatsApp, markCustomerNotified,
   };
 })();
 
