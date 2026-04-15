@@ -435,6 +435,28 @@
    ══════════════════════════════════════════════ */
 
 let _dashboardRole = null;
+let _loginNoticeMessage = '';
+
+function setLoginError(message) {
+  const err = document.getElementById('loginError');
+  if (!err) return;
+
+  if (message) {
+    err.textContent = message;
+    err.style.display = 'block';
+    return;
+  }
+
+  err.textContent = '';
+  err.style.display = 'none';
+}
+
+function resetLoginButton() {
+  const btn = document.getElementById('loginBtn');
+  if (!btn) return;
+  btn.textContent = 'Sign In';
+  btn.disabled = false;
+}
 
 function canSeeDashboardRevenue() {
   return _dashboardRole === 'Admin';
@@ -469,6 +491,13 @@ function applyDashboardRoleUI(role) {
 sb.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
     if (session) {
+      const access = await Auth.ensureActiveSession(session, { signOutOnFailure: false });
+      if (!access.ok) {
+        _loginNoticeMessage = access.message || _loginNoticeMessage;
+        await Auth.signOut();
+        showLogin();
+        return;
+      }
       showApp(session);
     } else {
       showLogin();
@@ -479,16 +508,34 @@ sb.auth.onAuthStateChange(async (event, session) => {
 });
 
 /* ── SHOW/HIDE SCREENS ── */
-function showLogin() {
+function showLogin(message) {
+  if (message) _loginNoticeMessage = message;
+
   document.getElementById('loginScreen').style.display    = 'flex';
   document.getElementById('registerScreen').style.display = 'none';
   document.getElementById('appShell').style.display       = 'none';
+
+  resetLoginButton();
+
+  const params = new URLSearchParams(window.location.search);
+  const deactivatedFromUrl = params.get('deactivated') === '1'
+    ? 'Your account has been deactivated. Ask your admin to reactivate it.'
+    : '';
+
+  setLoginError(_loginNoticeMessage || deactivatedFromUrl);
+
+  if (window.location.search) {
+    history.replaceState(null, '', window.location.pathname);
+  }
+
+  _loginNoticeMessage = '';
 }
 
 function showRegister() {
   document.getElementById('loginScreen').style.display    = 'none';
   document.getElementById('registerScreen').style.display = 'flex';
   document.getElementById('appShell').style.display       = 'none';
+  setLoginError('');
 }
 
 async function showApp(session) {
@@ -498,6 +545,12 @@ async function showApp(session) {
 
   // Get profile
   const profile = await RBAC.getCurrentUser();
+  if (profile?.active === false) {
+    _loginNoticeMessage = 'Your account has been deactivated. Ask your admin to reactivate it.';
+    await Auth.signOut();
+    return;
+  }
+
   const name = profile?.full_name || session.user.email.split('@')[0];
 
   applyDashboardRoleUI(profile?.role);
@@ -552,17 +605,15 @@ async function showApp(session) {
 async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const pw    = document.getElementById('loginPw').value;
-  const err   = document.getElementById('loginError');
-  err.style.display = 'none';
-  if (!email || !pw) { err.textContent = 'Please enter your email and password.'; err.style.display = 'block'; return; }
+  setLoginError('');
+  if (!email || !pw) { setLoginError('Please enter your email and password.'); return; }
   const btn = document.getElementById('loginBtn');
   btn.textContent = 'Signing in…'; btn.disabled = true;
   try {
     await Auth.signIn(email, pw);
     // onAuthStateChange fires SIGNED_IN → showApp()
   } catch(e) {
-    err.textContent = e.message || 'Sign in failed. Please try again.';
-    err.style.display = 'block';
+    setLoginError(e.message || 'Sign in failed. Please try again.');
     btn.textContent = 'Sign In'; btn.disabled = false;
   }
 }
@@ -570,9 +621,7 @@ async function doLogin() {
 async function doGoogleLogin() {
   try { await Auth.signInWithGoogle(); }
   catch(e) {
-    const err = document.getElementById('loginError');
-    err.textContent = 'Google sign-in failed. Please try again.';
-    err.style.display = 'block';
+    setLoginError('Google sign-in failed. Please try again.');
   }
 }
 

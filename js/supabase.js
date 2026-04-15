@@ -61,15 +61,45 @@ function _clearShopCache() {
   _cachedShopId = null;
 }
 
+const DEACTIVATED_ACCOUNT_MESSAGE = 'Your account has been deactivated. Ask your admin to reactivate it.';
+
 /* =================================================================
    AUTH MODULE
    ================================================================= */
 const Auth = (() => {
 
+  async function ensureActiveSession(session, { signOutOnFailure = true } = {}) {
+    const userId = session?.user?.id;
+    if (!userId) return { ok: true };
+
+    const { data: rows, error } = await sb.from('profiles')
+      .select('active')
+      .eq('id', userId)
+      .limit(1);
+
+    const isDeactivated = !error && rows?.length && rows[0]?.active === false;
+    if (!isDeactivated) return { ok: true };
+
+    if (signOutOnFailure) {
+      _clearShopCache();
+      await sb.auth.signOut();
+    }
+
+    return {
+      ok: false,
+      reason: 'deactivated',
+      message: DEACTIVATED_ACCOUNT_MESSAGE,
+    };
+  }
+
   async function signIn(email, password) {
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error;
     _clearShopCache();
+
+    const access = await ensureActiveSession(data.session);
+    if (!access.ok) throw new Error(access.message || 'Sign in failed.');
+
     return data;
   }
 
@@ -163,7 +193,7 @@ const Auth = (() => {
   return {
     signIn, signInWithGoogle, signUp, signOut,
     getSession, getUser, resetPassword,
-    requireAuth, requireRole, onAuthChange,
+    requireAuth, requireRole, onAuthChange, ensureActiveSession,
   };
 })();
 
