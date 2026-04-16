@@ -352,7 +352,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               Calendar
             </a>
-            <a href="reports.html" class="app-btn app-btn-ghost app-btn-sm" id="dashboardReportsBtn">
+            <a href="reports.html" class="app-btn app-btn-ghost app-btn-sm">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               Reports
             </a>
@@ -386,8 +386,8 @@
         </div>
 
         <!-- REVENUE + APPOINTMENTS -->
-        <div class="app-grid-2-1" id="dashRevenueRow">
-          <div class="panel" id="dashRevenuePanel">
+        <div class="app-grid-2-1">
+          <div class="panel">
             <div class="panel-header"><span class="panel-title">REVENUE — LAST 7 DAYS</span><a href="reports.html" class="app-btn app-btn-ghost app-btn-sm">Full Report</a></div>
             <div class="panel-body">
               <div class="bar-chart" id="revChart"></div>
@@ -434,70 +434,9 @@
    AUTH — onAuthChange is the ONLY entry point
    ══════════════════════════════════════════════ */
 
-let _dashboardRole = null;
-let _loginNoticeMessage = '';
-
-function setLoginError(message) {
-  const err = document.getElementById('loginError');
-  if (!err) return;
-
-  if (message) {
-    err.textContent = message;
-    err.style.display = 'block';
-    return;
-  }
-
-  err.textContent = '';
-  err.style.display = 'none';
-}
-
-function resetLoginButton() {
-  const btn = document.getElementById('loginBtn');
-  if (!btn) return;
-  btn.textContent = 'Sign In';
-  btn.disabled = false;
-}
-
-function canSeeDashboardRevenue() {
-  return _dashboardRole === 'Admin';
-}
-
-function applyDashboardRoleUI(role) {
-  _dashboardRole = role || null;
-
-  const showRevenue = canSeeDashboardRevenue();
-  const statsGrid = document.getElementById('statsGrid');
-  const revenueRow = document.getElementById('dashRevenueRow');
-  const revenuePanel = document.getElementById('dashRevenuePanel');
-  const reportsBtn = document.getElementById('dashboardReportsBtn');
-
-  if (statsGrid) {
-    statsGrid.classList.toggle('stats-grid-3', !showRevenue);
-  }
-
-  if (revenuePanel) {
-    revenuePanel.style.display = showRevenue ? '' : 'none';
-  }
-
-  if (revenueRow) {
-    revenueRow.classList.toggle('dashboard-single-col', !showRevenue);
-  }
-
-  if (reportsBtn) {
-    reportsBtn.style.display = role && RBAC.canAccess(role, 'reports') ? '' : 'none';
-  }
-}
-
 sb.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
     if (session) {
-      const access = await Auth.ensureActiveSession(session, { signOutOnFailure: false });
-      if (!access.ok) {
-        _loginNoticeMessage = access.message || _loginNoticeMessage;
-        await Auth.signOut();
-        showLogin();
-        return;
-      }
       showApp(session);
     } else {
       showLogin();
@@ -508,34 +447,16 @@ sb.auth.onAuthStateChange(async (event, session) => {
 });
 
 /* ── SHOW/HIDE SCREENS ── */
-function showLogin(message) {
-  if (message) _loginNoticeMessage = message;
-
+function showLogin() {
   document.getElementById('loginScreen').style.display    = 'flex';
   document.getElementById('registerScreen').style.display = 'none';
   document.getElementById('appShell').style.display       = 'none';
-
-  resetLoginButton();
-
-  const params = new URLSearchParams(window.location.search);
-  const deactivatedFromUrl = params.get('deactivated') === '1'
-    ? 'Your account has been deactivated. Ask your admin to reactivate it.'
-    : '';
-
-  setLoginError(_loginNoticeMessage || deactivatedFromUrl);
-
-  if (window.location.search) {
-    history.replaceState(null, '', window.location.pathname);
-  }
-
-  _loginNoticeMessage = '';
 }
 
 function showRegister() {
   document.getElementById('loginScreen').style.display    = 'none';
   document.getElementById('registerScreen').style.display = 'flex';
   document.getElementById('appShell').style.display       = 'none';
-  setLoginError('');
 }
 
 async function showApp(session) {
@@ -545,24 +466,12 @@ async function showApp(session) {
 
   // Get profile
   const profile = await RBAC.getCurrentUser();
-  if (profile?.active === false) {
-    _loginNoticeMessage = 'Your account has been deactivated. Ask your admin to reactivate it.';
-    await Auth.signOut();
-    return;
-  }
-
   const name = profile?.full_name || session.user.email.split('@')[0];
-
-  applyDashboardRoleUI(profile?.role);
 
   // Sidebar user
   document.getElementById('userName').textContent   = name;
   document.getElementById('userRole').textContent   = profile?.role || '—';
-  if (typeof renderAvatar === 'function') {
-    renderAvatar(document.getElementById('userAvatar'), name, profile?.avatar_url);
-  } else {
-    document.getElementById('userAvatar').textContent = name[0]?.toUpperCase() || '?';
-  }
+  document.getElementById('userAvatar').textContent = name[0]?.toUpperCase() || '?';
 
   // Welcome bar
   const hr = new Date().getHours();
@@ -605,15 +514,17 @@ async function showApp(session) {
 async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const pw    = document.getElementById('loginPw').value;
-  setLoginError('');
-  if (!email || !pw) { setLoginError('Please enter your email and password.'); return; }
+  const err   = document.getElementById('loginError');
+  err.style.display = 'none';
+  if (!email || !pw) { err.textContent = 'Please enter your email and password.'; err.style.display = 'block'; return; }
   const btn = document.getElementById('loginBtn');
   btn.textContent = 'Signing in…'; btn.disabled = true;
   try {
     await Auth.signIn(email, pw);
     // onAuthStateChange fires SIGNED_IN → showApp()
   } catch(e) {
-    setLoginError(e.message || 'Sign in failed. Please try again.');
+    err.textContent = e.message || 'Sign in failed. Please try again.';
+    err.style.display = 'block';
     btn.textContent = 'Sign In'; btn.disabled = false;
   }
 }
@@ -621,7 +532,9 @@ async function doLogin() {
 async function doGoogleLogin() {
   try { await Auth.signInWithGoogle(); }
   catch(e) {
-    setLoginError('Google sign-in failed. Please try again.');
+    const err = document.getElementById('loginError');
+    err.textContent = 'Google sign-in failed. Please try again.';
+    err.style.display = 'block';
   }
 }
 
@@ -754,12 +667,10 @@ async function loadDashboard() {
   } catch(e) { renderPOs([]); }
 
   // Revenue chart
-  if (canSeeDashboardRevenue()) {
-    try {
-      const revenueW = await GS.getRevenueWeekly();
-      renderRevChart(revenueW);
-    } catch(e) { renderRevChart([]); }
-  }
+  try {
+    const revenueW = await GS.getRevenueWeekly();
+    renderRevChart(revenueW);
+  } catch(e) { renderRevChart([]); }
 
   const _now = new Date();
   const _timeStr = _now.toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
@@ -768,15 +679,11 @@ async function loadDashboard() {
 
 // Fallback KPI builder — runs direct table queries when the view is missing
 async function buildKPIsFallback() {
-  const revenueQuery = canSeeDashboardRevenue()
-    ? sb.from('invoices').select('total_amount,paid_at,status').eq('status','Paid')
-    : Promise.resolve({ data: [] });
-
   const [wos, inv, appts, invoices] = await Promise.allSettled([
     sb.from('work_orders').select('id,status').not('status','in','("Completed","Cancelled")'),
     sb.from('inventory').select('id,qty,threshold').lte('qty', 0),  // rough fallback
     sb.from('appointments').select('id,appt_date').gte('appt_date', new Date().toISOString().split('T')[0]),
-    revenueQuery,
+    sb.from('invoices').select('total_amount,paid_at,status').eq('status','Paid'),
   ]);
 
   const activeWOs = wos.status === 'fulfilled' ? (wos.value.data||[]).length : 0;
@@ -813,11 +720,7 @@ async function buildKPIsFallback() {
 
 function renderStats(k) {
   const fmt = n => n ?? 0;
-  const statsGrid = document.getElementById('statsGrid');
-  if (!statsGrid) return;
-
-  statsGrid.classList.toggle('stats-grid-3', !canSeeDashboardRevenue());
-  statsGrid.innerHTML = canSeeDashboardRevenue() ? `
+  document.getElementById('statsGrid').innerHTML = `
     <div class="stat-card rust" style="cursor:pointer" onclick="location='work-orders.html'">
       <div class="stat-label">Active Jobs</div>
       <div class="stat-value">${fmt(k.active_work_orders)}</div>
@@ -832,22 +735,6 @@ function renderStats(k) {
       <div class="stat-label">Revenue This Month</div>
       <div class="stat-value">${formatCurrency(k.revenue_this_month)}</div>
       <div class="stat-delta ${k.unpaid_invoices > 0 ? 'down' : 'up'}">${fmt(k.unpaid_invoices)} unpaid invoice${k.unpaid_invoices !== 1 ? 's' : ''}</div>
-    </div>
-    <div class="stat-card blue" style="cursor:pointer" onclick="location='appointments.html'">
-      <div class="stat-label">Upcoming Appointments</div>
-      <div class="stat-value">${fmt(k.upcoming_appointments)}</div>
-      <div class="stat-delta">${fmt(k.unread_notifications)} unread alert${k.unread_notifications !== 1 ? 's' : ''}</div>
-    </div>`
-  : `
-    <div class="stat-card rust" style="cursor:pointer" onclick="location='work-orders.html'">
-      <div class="stat-label">Active Jobs</div>
-      <div class="stat-value">${fmt(k.active_work_orders)}</div>
-      <div class="stat-delta">Work orders in progress</div>
-    </div>
-    <div class="stat-card amber" style="cursor:pointer" onclick="location='inventory.html'">
-      <div class="stat-label">Low Stock Parts</div>
-      <div class="stat-value">${fmt(k.low_stock_parts)}</div>
-      <div class="stat-delta ${k.low_stock_parts > 0 ? 'down' : ''}">${k.low_stock_parts > 0 ? 'Reorder needed' : 'All parts stocked'}</div>
     </div>
     <div class="stat-card blue" style="cursor:pointer" onclick="location='appointments.html'">
       <div class="stat-label">Upcoming Appointments</div>
