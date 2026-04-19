@@ -393,7 +393,7 @@ const GS = (() => {
     if (!wo) throw new Error('Work order not found');
 
     const [custRes, vehRes, mechRes, partsRes] = await Promise.all([
-      wo.customer_id ? sb.from('customers').select('id,first_name,last_name').eq('id', wo.customer_id).limit(1) : { data: [] },
+      wo.customer_id ? sb.from('customers').select('id,first_name,last_name,phone').eq('id', wo.customer_id).limit(1) : { data: [] },
       wo.vehicle_id  ? sb.from('vehicles').select('id,year,make,model,vin,plate,mileage').eq('id', wo.vehicle_id).limit(1) : { data: [] },
       wo.mechanic_id ? sb.from('profiles').select('id,full_name').eq('id', wo.mechanic_id).limit(1) : { data: [] },
       sb.from('work_order_parts').select('id,qty,unit_cost,part_id').eq('work_order_id', id),
@@ -410,10 +410,11 @@ const GS = (() => {
     }
     return {
       ...wo,
-      customer_name: cust ? `${cust.first_name} ${cust.last_name}` : '—',
-      vehicle_label: veh  ? `${veh.year||''} ${veh.make} ${veh.model}`.trim() : '—',
-      vehicle:       veh  || null,
-      mechanic_name: mech?.full_name || null,
+      customer_name:  cust ? `${cust.first_name} ${cust.last_name}` : '—',
+      customer_phone: cust?.phone || null,
+      vehicle_label:  veh  ? `${veh.year||''} ${veh.make} ${veh.model}`.trim() : '—',
+      vehicle:        veh  || null,
+      mechanic_name:  mech?.full_name || null,
       parts: parts.map(p => ({ ...p, inventory: invMap[p.part_id] || null })),
     };
   }
@@ -713,50 +714,26 @@ const GS = (() => {
 
   async function generateInvoiceFromWO(workOrderId) {
     const sid = await _shopId();
-
-    // Check if invoice already exists for this work order
-    const { data: existing } = await sb.from('invoices')
-      .select('*').eq('work_order_id', workOrderId).eq('shop_id', sid).limit(1);
-
     const [woRes, settingsRes] = await Promise.all([
       sb.from('work_orders').select('*, customers(id,first_name,last_name), work_order_parts(id,qty,unit_cost,part_id,inventory:part_id(name))').eq('id', workOrderId).single(),
       sb.from('shop_settings').select('labor_rate,tax_rate').eq('shop_id', sid).single(),
     ]);
     if (woRes.error) throw new Error('Work order not found');
-    const wo       = woRes.data;
+    const wo = woRes.data;
     const settings = settingsRes.data || {};
-
     const laborRate   = parseFloat(settings.labor_rate || 0);
     const taxRate     = parseFloat(settings.tax_rate   || 0) / 100;
     const laborAmount = Math.round((wo.labor_hours || 0) * laborRate * 100) / 100;
     const partsAmount = Math.round((wo.work_order_parts || []).reduce((s, p) => s + (p.unit_cost || 0) * (p.qty || 0), 0) * 100) / 100;
     const taxAmount   = Math.round((laborAmount + partsAmount) * taxRate * 100) / 100;
     const total       = laborAmount + partsAmount + taxAmount;
-
-    if (existing && existing.length > 0) {
-      // Invoice already exists — update the amounts to reflect latest parts/labour
-      // then return the existing invoice (don't create a duplicate)
-      const { data: updated, error: updErr } = await sb.from('invoices')
-        .update({
-          labor_amount: laborAmount, parts_amount: partsAmount,
-          tax_amount: taxAmount,    total_amount: total,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existing[0].id)
-        .select().limit(1);
-      if (updErr) throw updErr;
-      return updated?.[0] || existing[0];
-    }
-
-    // No existing invoice — insert fresh
     const { data: inv, error: invErr } = await sb.from('invoices').insert({
       shop_id: sid, work_order_id: workOrderId, customer_id: wo.customer_id,
       ref: '', status: 'Unpaid', invoice_date: new Date().toISOString().split('T')[0],
-      labor_amount: laborAmount, parts_amount: partsAmount,
-      tax_amount: taxAmount,     total_amount: total,
-    }).select().limit(1);
+      labor_amount: laborAmount, parts_amount: partsAmount, tax_amount: taxAmount, total_amount: total,
+    }).select().single();
     if (invErr) throw invErr;
-    return inv?.[0];
+    return inv;
   }
 
   async function getInvoiceFull(invoiceId) {
@@ -914,6 +891,13 @@ const GS = (() => {
       .or('for_user_id.is.null,for_user_id.eq.' + uid);
     if (error) return 0;
     return count || 0;
+  }
+
+  async function markCustomerNotified(workOrderId) {
+    const { error } = await sb.from('work_orders')
+      .update({ customer_notified_at: new Date().toISOString() })
+      .eq('id', workOrderId);
+    if (error) throw error;
   }
 
   async function markNotificationRead(id) {
@@ -1112,7 +1096,7 @@ const GS = (() => {
     getPurchaseOrders, createPurchaseOrder, updatePOStatus, receivePOItem,
     getInvoices, createInvoice, generateInvoiceFromWO, getInvoiceFull, markInvoicePaid, updateInvoiceStatus,
     getAppointments, createAppointment, updateAppointment, cancelAppointment,
-    createNotification, getNotifications, getUnreadCount, markNotificationRead,
+    createNotification, getNotifications, getUnreadCount, markNotificationRead, markCustomerNotified,
     markAllNotificationsRead, deleteNotification, clearReadNotifications,
     getDashboardKPIs,
     getRevenueMonthly, getRevenueWeekly,

@@ -629,8 +629,11 @@
               <div class="danger-zone-sub">These actions are irreversible. Please read carefully before proceeding.</div>
               <div style="display:flex;flex-direction:column;gap:16px;">
                 <div style="background:var(--app-surface);border:1px solid rgba(181,43,30,.25);border-radius:var(--r-sm);padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
-                  <div><div style="font-size:13px;font-weight:700;color:var(--app-text)">Export All Data</div><div style="font-size:12px;color:var(--app-muted);margin-top:3px">Download a complete ZIP of your shop data (JSON + CSVs).</div></div>
-                  <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Data export queued — you will receive an email shortly','success')">Export Data</button>
+                  <div><div style="font-size:13px;font-weight:700;color:var(--app-text)">Export All Data</div><div style="font-size:12px;color:var(--app-muted);margin-top:3px">Download all your shop data as CSV files — customers, work orders, invoices, inventory, appointments and more.</div></div>
+                  <button class="app-btn app-btn-ghost app-btn-sm" id="exportDataBtn" onclick="exportAllData()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="margin-right:5px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export Data
+                  </button>
                 </div>
                 <div style="background:var(--app-surface);border:1px solid rgba(181,43,30,.25);border-radius:var(--r-sm);padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
                   <div><div style="font-size:13px;font-weight:700;color:var(--app-text)">Reset Demo Data</div><div style="font-size:12px;color:var(--app-muted);margin-top:3px">Wipe all data and reload the original sample dataset.</div></div>
@@ -1397,6 +1400,216 @@ async function executeDeleteAccount() {
     errEl.style.display = 'block';
     btn.disabled = false;
     btn.textContent = 'Permanently Delete Account';
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   EXPORT ALL DATA
+   Downloads each data table as a CSV file.
+   Runs entirely in the browser — no server, no email needed.
+───────────────────────────────────────────────────────────────── */
+async function exportAllData() {
+  const btn = document.getElementById('exportDataBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing export…'; }
+
+  try {
+    Toast.show('Fetching your data — downloads will start shortly…', 'info', 4000);
+
+    // ── Fetch all datasets in parallel ───────────────────────────
+    const [
+      customers, workOrders, invoices, inventory,
+      suppliers, purchaseOrders, appointments, staff,
+    ] = await Promise.all([
+      GS.getCustomers().catch(() => []),
+      GS.getWorkOrders().catch(() => []),
+      GS.getInvoices().catch(() => []),
+      GS.getInventory().catch(() => []),
+      GS.getSuppliers().catch(() => []),
+      GS.getPurchaseOrders().catch(() => []),
+      GS.getAppointments().catch(() => []),
+      RBAC.getShopStaff().catch(() => []),
+    ]);
+
+    const shop = await RBAC.getShop().catch(() => null);
+    const shopName = (shop?.name || 'GearShift').replace(/[^a-z0-9]/gi, '_');
+    const dateStr  = new Date().toISOString().slice(0, 10);
+    const prefix   = shopName + '_' + dateStr;
+
+    // ── CSV helpers ───────────────────────────────────────────────
+    function escCSV(val) {
+      if (val === null || val === undefined) return '';
+      const s = String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }
+
+    function toCSV(rows, columns) {
+      if (!rows || !rows.length) return columns.join(',') + '\n(no data)';
+      const header = columns.map(c => typeof c === 'string' ? c : c.label).join(',');
+      const body   = rows.map(row =>
+        columns.map(c => {
+          const key = typeof c === 'string' ? c : c.key;
+          const val = typeof c.fn === 'function' ? c.fn(row) : row[key];
+          return escCSV(val);
+        }).join(',')
+      ).join('\n');
+      return header + '\n' + body;
+    }
+
+    function download(filename, csvContent) {
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // ── Define columns per table ──────────────────────────────────
+    const exports = [
+      {
+        filename: prefix + '_customers.csv',
+        data: customers,
+        cols: [
+          { label: 'First Name',   key: 'first_name' },
+          { label: 'Last Name',    key: 'last_name' },
+          { label: 'Email',        key: 'email' },
+          { label: 'Phone',        key: 'phone' },
+          { label: 'Address',      key: 'address' },
+          { label: 'Created At',   key: 'created_at', fn: r => r.created_at?.slice(0,10) },
+        ],
+      },
+      {
+        filename: prefix + '_work_orders.csv',
+        data: workOrders,
+        cols: [
+          { label: 'WO Ref',       key: 'ref' },
+          { label: 'Status',       key: 'status' },
+          { label: 'Customer',     key: 'customer_name' },
+          { label: 'Vehicle',      key: 'vehicle_label' },
+          { label: 'Fault',        key: 'fault' },
+          { label: 'Mechanic',     key: 'mechanic_name' },
+          { label: 'Labour Hours', key: 'labor_hours' },
+          { label: 'Notes',        key: 'notes' },
+          { label: 'Created At',   key: 'created_at', fn: r => r.created_at?.slice(0,10) },
+        ],
+      },
+      {
+        filename: prefix + '_invoices.csv',
+        data: invoices,
+        cols: [
+          { label: 'Invoice Ref',  key: 'ref' },
+          { label: 'WO Ref',       key: 'wo_ref' },
+          { label: 'Customer',     key: 'customer_name' },
+          { label: 'Status',       key: 'status' },
+          { label: 'Labour (₦)',   key: 'labor_amount' },
+          { label: 'Parts (₦)',    key: 'parts_amount' },
+          { label: 'Tax (₦)',      key: 'tax_amount' },
+          { label: 'Total (₦)',    key: 'total_amount' },
+          { label: 'Payment Method', key: 'payment_method' },
+          { label: 'Invoice Date', key: 'invoice_date' },
+          { label: 'Paid At',      key: 'paid_at', fn: r => r.paid_at?.slice(0,10) || '' },
+        ],
+      },
+      {
+        filename: prefix + '_inventory.csv',
+        data: inventory,
+        cols: [
+          { label: 'Name',         key: 'name' },
+          { label: 'SKU',          key: 'sku' },
+          { label: 'Category',     key: 'category' },
+          { label: 'Qty In Stock', key: 'qty' },
+          { label: 'Min Stock',    key: 'threshold' },
+          { label: 'Unit Cost (₦)',key: 'unit_cost' },
+          { label: 'Location',     key: 'location' },
+        ],
+      },
+      {
+        filename: prefix + '_suppliers.csv',
+        data: suppliers,
+        cols: [
+          { label: 'Name',         key: 'name' },
+          { label: 'Contact',      key: 'contact' },
+          { label: 'Email',        key: 'email' },
+          { label: 'Phone',        key: 'phone' },
+          { label: 'Lead Days',    key: 'lead_days' },
+          { label: 'Terms',        key: 'terms' },
+          { label: 'Categories',   key: 'categories' },
+          { label: 'Rating',       key: 'rating' },
+        ],
+      },
+      {
+        filename: prefix + '_purchase_orders.csv',
+        data: purchaseOrders,
+        cols: [
+          { label: 'PO Ref',       key: 'ref' },
+          { label: 'Supplier',     fn: r => r.suppliers?.name || '' },
+          { label: 'Status',       key: 'status' },
+          { label: 'Items',        fn: r => (r.purchase_order_items||[]).length },
+          { label: 'Total (₦)',    fn: r => (r.purchase_order_items||[]).reduce((s,i) => s+(i.unit_cost||0)*(i.qty||0), 0).toFixed(2) },
+          { label: 'Notes',        key: 'notes' },
+          { label: 'Created At',   key: 'created_at', fn: r => r.created_at?.slice(0,10) },
+          { label: 'Expected At',  key: 'expected_at', fn: r => r.expected_at?.slice(0,10) || '' },
+        ],
+      },
+      {
+        filename: prefix + '_appointments.csv',
+        data: appointments,
+        cols: [
+          { label: 'Customer',     key: 'guest_name' },
+          { label: 'Phone',        key: 'guest_phone' },
+          { label: 'Vehicle',      key: 'vehicle_info' },
+          { label: 'Service',      key: 'service' },
+          { label: 'Date',         key: 'appt_date' },
+          { label: 'Time',         key: 'appt_time' },
+          { label: 'Status',       key: 'status' },
+          { label: 'Notes',        key: 'notes' },
+        ],
+      },
+      {
+        filename: prefix + '_staff.csv',
+        data: staff,
+        cols: [
+          { label: 'Full Name',    key: 'full_name' },
+          { label: 'Email',        key: 'email' },
+          { label: 'Role',         key: 'role' },
+          { label: 'Active',       key: 'active' },
+          { label: 'Phone',        key: 'phone' },
+        ],
+      },
+    ];
+
+    // ── Trigger downloads with small delays to avoid browser blocking
+    let delay = 0;
+    let count = 0;
+    exports.forEach(({ filename, data, cols }) => {
+      if (!data || !data.length) return;
+      setTimeout(() => {
+        download(filename, toCSV(data, cols));
+        count++;
+      }, delay);
+      delay += 400;
+    });
+
+    // ── Show summary toast after all downloads initiated ──────────
+    setTimeout(() => {
+      const nonEmpty = exports.filter(e => e.data && e.data.length).length;
+      Toast.show(
+        nonEmpty + ' CSV files downloaded ✓ — check your Downloads folder',
+        'success',
+        6000
+      );
+      if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="margin-right:5px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export Data'; }
+    }, delay + 200);
+
+  } catch(err) {
+    Toast.show('Export failed: ' + (err.message || 'Unknown error'), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Export Data'; }
   }
 }
 
