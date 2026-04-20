@@ -272,42 +272,42 @@
                   <div class="settings-field">
                     <div class="settings-field-left"><div class="settings-field-label">Payment Terms</div><div class="settings-field-desc">Default terms shown on all invoices.</div></div>
                     <div class="settings-field-right">
-                      <select class="app-input">
-                        <option>Due on receipt</option>
-                        <option>Net 15</option>
-                        <option selected>Net 30</option>
-                        <option>Net 45</option>
-                        <option>Net 60</option>
+                      <select class="app-input" id="set-payment-terms">
+                        <option value="due_on_receipt">Due on receipt</option>
+                        <option value="net_15">Net 15</option>
+                        <option value="net_30" selected>Net 30</option>
+                        <option value="net_45">Net 45</option>
+                        <option value="net_60">Net 60</option>
                       </select>
                     </div>
                   </div>
                   <div class="settings-field">
                     <div class="settings-field-left"><div class="settings-field-label">Auto-send Invoices</div><div class="settings-field-desc">Email invoice PDF to customer when generated.</div></div>
-                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="tog-auto-send" onclick="toggleSetting(this)"></div><span class="toggle-label" id="tog-auto-send-lbl">Enabled</span></div></div>
                   </div>
                   <div class="settings-field">
                     <div class="settings-field-left"><div class="settings-field-label">Send Payment Reminders</div><div class="settings-field-desc">Automatically email overdue reminders after 7, 14, and 30 days.</div></div>
-                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="tog-reminders" onclick="toggleSetting(this)"></div><span class="toggle-label" id="tog-reminders-lbl">Enabled</span></div></div>
                   </div>
                 </div>
                 <div class="settings-section">
                   <div class="settings-section-title">Accepted Payment Methods</div>
                   <div class="settings-section-sub">Enable the methods you accept from customers.</div>
                   <div class="settings-field">
-                    <div class="settings-field-left"><div class="settings-field-label">Credit / Debit Card (Stripe)</div></div>
-                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                    <div class="settings-field-left"><div class="settings-field-label">Card (Paystack)</div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="tog-pay-card" onclick="toggleSetting(this)"></div><span class="toggle-label" id="tog-pay-card-lbl">Enabled</span></div></div>
                   </div>
                   <div class="settings-field">
-                    <div class="settings-field-left"><div class="settings-field-label">Bank Transfer (ACH)</div></div>
-                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                    <div class="settings-field-left"><div class="settings-field-label">Bank Transfer</div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="tog-pay-transfer" onclick="toggleSetting(this)"></div><span class="toggle-label" id="tog-pay-transfer-lbl">Enabled</span></div></div>
                   </div>
                   <div class="settings-field">
                     <div class="settings-field-left"><div class="settings-field-label">Cash</div></div>
-                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Enabled</span></div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle on" id="tog-pay-cash" onclick="toggleSetting(this)"></div><span class="toggle-label" id="tog-pay-cash-lbl">Enabled</span></div></div>
                   </div>
                   <div class="settings-field">
                     <div class="settings-field-left"><div class="settings-field-label">Check</div></div>
-                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle" onclick="this.classList.toggle('on')"></div><span class="toggle-label">Disabled</span></div></div>
+                    <div class="settings-field-right"><div class="toggle-wrap"><div class="toggle" id="tog-pay-check" onclick="toggleSetting(this)"></div><span class="toggle-label" id="tog-pay-check-lbl">Disabled</span></div></div>
                   </div>
                 </div>
               </div>
@@ -793,7 +793,20 @@ async function loadSettings(user) {
       setVal('set-labor',     settings.labor_rate);
       setVal('set-tax',       settings.tax_rate);
       setVal('set-invprefix', settings.invoice_prefix || 'INV-');
+      setVal('set-invnum',    settings.invoice_next_num || '1');
       setVal('set-bays',      settings.bays || '');
+
+      // Restore payment terms select
+      const termsEl = document.getElementById('set-payment-terms');
+      if (termsEl && settings.payment_terms) termsEl.value = settings.payment_terms;
+
+      // Restore toggle states — default true for most, false for check
+      setToggle('tog-auto-send',    settings.auto_send_invoices  !== false);
+      setToggle('tog-reminders',    settings.payment_reminders   !== false);
+      setToggle('tog-pay-card',     settings.pay_card            !== false);
+      setToggle('tog-pay-transfer', settings.pay_transfer        !== false);
+      setToggle('tog-pay-cash',     settings.pay_cash            !== false);
+      setToggle('tog-pay-check',    settings.pay_check           === true);
       setVal('set-wd-open',   settings.weekday_open  || '08:00');
       setVal('set-wd-close',  settings.weekday_close || '18:00');
       setVal('set-sat-open',  settings.saturday_open  || '09:00');
@@ -982,21 +995,56 @@ async function savePersonalInfo() {
 async function saveBillingSettings() {
   const laborRate = parseFloat(val('set-labor'));
   const taxRate   = parseFloat(val('set-tax'));
-  const prefix    = val('set-invprefix');
+  const prefix    = val('set-invprefix').trim() || 'INV-';
+  const nextNum   = parseInt(val('set-invnum')) || 1;
+  const terms     = document.getElementById('set-payment-terms')?.value || 'net_30';
 
   if (isNaN(laborRate) || laborRate < 0) { Toast.show('Enter a valid labor rate', 'error'); return; }
-  if (isNaN(taxRate)   || taxRate < 0)   { Toast.show('Enter a valid tax rate', 'error'); return; }
+  if (isNaN(taxRate)   || taxRate < 0)   { Toast.show('Enter a valid tax rate',   'error'); return; }
+
+  const btn = document.querySelector('#sp-billing .app-btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
   try {
     await GS.updateSettings({
-      labor_rate:     laborRate,
-      tax_rate:       taxRate,
-      invoice_prefix: prefix,
+      labor_rate:         laborRate,
+      tax_rate:           taxRate,
+      invoice_prefix:     prefix,
+      invoice_next_num:   nextNum,
+      payment_terms:      terms,
+      auto_send_invoices: getToggle('tog-auto-send'),
+      payment_reminders:  getToggle('tog-reminders'),
+      pay_card:           getToggle('tog-pay-card'),
+      pay_transfer:       getToggle('tog-pay-transfer'),
+      pay_cash:           getToggle('tog-pay-cash'),
+      pay_check:          getToggle('tog-pay-check'),
     });
-    Toast.show('Billing settings saved', 'success');
+    Toast.show('Billing settings saved ✓', 'success');
   } catch(err) {
     Toast.show(err.message || 'Failed to save', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
   }
+}
+
+/* Toggle helpers */
+function getToggle(id) {
+  const el = document.getElementById(id);
+  return el ? el.classList.contains('on') : false;
+}
+
+function setToggle(id, isOn) {
+  const el  = document.getElementById(id);
+  const lbl = document.getElementById(id + '-lbl');
+  if (!el) return;
+  if (isOn) el.classList.add('on'); else el.classList.remove('on');
+  if (lbl) lbl.textContent = isOn ? 'Enabled' : 'Disabled';
+}
+
+function toggleSetting(el) {
+  el.classList.toggle('on');
+  const lbl = document.getElementById(el.id + '-lbl');
+  if (lbl) lbl.textContent = el.classList.contains('on') ? 'Enabled' : 'Disabled';
 }
 
 async function updatePassword() {
