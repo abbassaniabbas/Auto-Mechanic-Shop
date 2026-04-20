@@ -54,6 +54,13 @@
 .part-line:last-child { border-bottom:none; }
 .part-name  { flex:1; font-size:13px; color:var(--app-text); }
 .part-count { font-family:var(--ff-mono); font-size:12px; color:var(--app-muted); min-width:60px; text-align:right; }
+.wa-notified-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  margin-top:8px; padding:3px 8px;
+  background:rgba(37,211,102,0.12); border:1px solid rgba(37,211,102,0.25);
+  border-radius:4px; color:#4ade80;
+  font-family:var(--ff-mono); font-size:10px; letter-spacing:0.5px;
+}
 </style>
 </head>
 <body>
@@ -110,6 +117,7 @@
           </select>
           <select class="filter-select" id="woMechFilter" onchange="renderWOTable()">
             <option value="">All Mechanics</option>
+            <option>Mike Torres</option><option>Sam Lee</option><option>Rita Patel</option>
           </select>
         </div>
         <div class="panel">
@@ -416,8 +424,6 @@ async function loadWorkOrders() {
     woData = await GS.getWorkOrders();
     renderKanban();
     renderWOTable();
-    renderActiveJobs();
-    renderPartsRequests();
   } catch (err) {
     console.error(err);
     Toast.show('Failed to load work orders', 'error');
@@ -590,19 +596,18 @@ function renderWOTable() {
   }
   tbody.innerHTML = filtered.map(w => `
     <tr style="cursor:pointer" onclick="openWODetail('${w.id}')">
-      <td class="td-mono td-bold" style="color:var(--amber)">${w.ref || '—'}</td>
-      <td style="color:var(--app-text)">${w.customer_name || '—'}</td>
-      <td class="td-muted">${w.vehicle_label || '—'}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--app-text)">${w.fault || '—'}</td>
-      <td style="color:var(--app-text)">${w.mechanic_name || 'Unassigned'}</td>
+      <td class="td-mono td-bold">${w.ref || '—'}</td>
+      <td>${w.customer_name}</td>
+      <td class="td-muted">${w.vehicle_label}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${w.fault || '—'}</td>
       <td>${makeBadge(w.status)}</td>
+      <td class="td-muted">${w.mechanic_name || 'Unassigned'}</td>
       <td class="td-muted td-mono" style="font-size:11px">${formatDate(w.created_at)}</td>
     </tr>
   `).join('');
-  // Populate mechanic filter from live staff data (reset first)
+  // Populate mechanic filter
   const mf = document.getElementById('woMechFilter');
-  if (mf && staffData.length && mf.options.length <= 1) {
-    mf.innerHTML = '<option value="">All Mechanics</option>';
+  if (mf && mf.options.length <= 1) {
     staffData.forEach(s => {
       const opt = document.createElement('option');
       opt.value = s.id; opt.textContent = s.full_name;
@@ -1113,74 +1118,6 @@ async function sendWAMessage() {
 function resetWAMessage() {
   const orig = document.getElementById('waModal').dataset.origMsg || '';
   document.getElementById('waMessage').value = orig;
-}
-
-function switchPane(btn) {
-  document.querySelectorAll('.app-sub-link').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  const pane = document.getElementById(btn.dataset.pane);
-  if (pane) pane.classList.add('active');
-  // Render the pane that was just activated
-  const id = btn.dataset.pane;
-  if (id === 'pane-all')    renderWOTable();
-  if (id === 'pane-active') renderActiveJobs();
-  if (id === 'pane-parts')  renderPartsRequests();
-}
-
-function formatDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function renderActiveJobs() {
-  const tbody = document.getElementById('activeJobsBody');
-  if (!tbody) return;
-  const active = woData.filter(w => ['Open','In Progress','Awaiting Parts'].includes(w.status));
-  if (!active.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--app-muted)">No active jobs</td></tr>';
-    return;
-  }
-  tbody.innerHTML = active.map(w => `
-    <tr style="cursor:pointer" onclick="openWODetail('${w.id}')">
-      <td class="td-mono td-bold" style="color:var(--amber)">${w.ref || '—'}</td>
-      <td style="color:var(--app-text)">${w.customer_name || '—'}</td>
-      <td class="td-muted">${w.vehicle_label || '—'}</td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--app-text)">${w.fault || '—'}</td>
-      <td style="color:var(--app-text)">${w.mechanic_name || 'Unassigned'}</td>
-      <td>${makeBadge(w.status)}</td>
-      <td class="td-mono" style="color:var(--app-text)">${w.labor_hours ?? '—'}</td>
-      <td>
-        <button class="app-btn app-btn-ghost app-btn-sm" onclick="event.stopPropagation();openWODetail('${w.id}')">View</button>
-      </td>
-    </tr>`).join('');
-}
-
-function renderPartsRequests() {
-  const tbody = document.getElementById('partsReqBody');
-  if (!tbody) return;
-  const waiting = woData.filter(w => w.status === 'Awaiting Parts');
-  if (!waiting.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--app-muted)">No work orders awaiting parts</td></tr>';
-    return;
-  }
-  tbody.innerHTML = waiting.map(w => {
-    const partsList = (w.parts || []).map(p => p.inventory?.name || p.name || 'Part').join(', ') || '—';
-    const since = w.status_changed_at || w.updated_at || w.created_at;
-    return `
-    <tr style="cursor:pointer" onclick="openWODetail('${w.id}')">
-      <td class="td-mono td-bold" style="color:var(--amber)">${w.ref || '—'}</td>
-      <td style="color:var(--app-text)">${w.customer_name || '—'}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--app-text)">${w.fault || '—'}</td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--app-muted);font-size:12px">${partsList}</td>
-      <td style="color:var(--app-text)">${w.mechanic_name || 'Unassigned'}</td>
-      <td class="td-mono td-muted" style="font-size:11px">${formatDate(since)}</td>
-      <td>
-        <button class="app-btn app-btn-primary app-btn-sm" onclick="event.stopPropagation();window.location='supply-chain.html'">Create PO</button>
-      </td>
-    </tr>`;
-  }).join('');
 }
 
 document.addEventListener('DOMContentLoaded', initPage);
