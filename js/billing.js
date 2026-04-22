@@ -38,7 +38,7 @@ const BILLING = {
   PLANS: {
     monthly: {
       label:     'Pro — Monthly',
-      amount:    1050000,          // ₦10,500 in kobo
+      amount:    50000,          // ₦10,500 in kobo
       display:   '₦10,500',
       period:    'month',
       cycle:     'monthly',
