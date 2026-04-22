@@ -445,7 +445,6 @@ async function loadInvites() {
   } catch(e) {}
 }
 
-<<<<<<< Updated upstream
 function getTodayInputValue() {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -712,7 +711,8 @@ function renderActivity() {
         </div>
       </div>`;
   }).join('');
-=======
+}
+
 function getActiveStaffCount() {
   return staffData.filter(s => s.active !== false).length;
 }
@@ -729,7 +729,6 @@ async function ensureStaffCapacity(includePendingInvites) {
   if (check.allowed) return true;
   Toast.show(check.message + ' Upgrade from Settings → Plan & Billing when you need more seats.', 'error', 8000);
   return false;
->>>>>>> Stashed changes
 }
 
 /* ── STATS ── */
