@@ -141,20 +141,20 @@
       <!-- REVENUE -->
       <div class="view-pane active" id="pane-revenue">
         <div class="export-bar">
-          <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Exported as CSV','success')">Export CSV</button>
-          <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Report PDF downloaded','success')">Export PDF</button>
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="exportRevenueCSV()">Export CSV</button>
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="exportRevenuePDF()">Export PDF</button>
         </div>
         <div class="kpi-row" id="revenueKPIs"></div>
         <div class="app-grid-2">
           <div class="report-card">
-            <div class="report-card-title">REVENUE BY MONTH</div>
-            <div class="report-card-sub">Paid invoices — last 7 months</div>
+            <div class="report-card-title" id="revTrendTitle">REVENUE TREND</div>
+            <div class="report-card-sub" id="revTrendSub">Paid invoices for the selected period</div>
             <div class="bar-chart" id="revMonthChart" style="height:180px"></div>
             <div style="display:flex;gap:0" id="revMonthX"></div>
           </div>
           <div class="report-card">
-            <div class="report-card-title">REVENUE BY DAY (THIS WEEK)</div>
-            <div class="report-card-sub">Mon – Sun, current week</div>
+            <div class="report-card-title" id="revDetailTitle">PAID INVOICES</div>
+            <div class="report-card-sub" id="revDetailSub">Breakdown for the selected period</div>
             <div class="bar-chart" id="revWeekChart" style="height:180px"></div>
             <div style="display:flex;gap:0" id="revWeekX"></div>
           </div>
@@ -248,7 +248,7 @@
       <!-- SUPPLIERS -->
       <div class="view-pane" id="pane-suppliers">
         <div class="export-bar">
-          <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Exported as CSV','success')">Export CSV</button>
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="exportSuppliersCSV()">Export CSV</button>
         </div>
         <div class="kpi-row" id="suppKPIs"></div>
         <div class="report-card">
@@ -274,7 +274,7 @@
       <!-- OPERATIONS -->
       <div class="view-pane" id="pane-ops">
         <div class="export-bar">
-          <button class="app-btn app-btn-ghost app-btn-sm" onclick="Toast.show('Exported as CSV','success')">Export CSV</button>
+          <button class="app-btn app-btn-ghost app-btn-sm" onclick="exportOpsCSV()">Export CSV</button>
         </div>
         <div class="kpi-row" id="opsKPIs"></div>
         <div class="app-grid-2">
