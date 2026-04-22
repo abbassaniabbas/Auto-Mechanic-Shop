@@ -23,7 +23,7 @@ const RBAC = (() => {
     'supply-chain':{ Admin: 'full','Service Advisor': false,  Mechanic: false,  'Parts Manager': 'full' },
     invoices:     { Admin: 'full', 'Service Advisor': 'full', Mechanic: false,  'Parts Manager': false  },
     reports:      { Admin: 'full', 'Service Advisor': false,  Mechanic: false,  'Parts Manager': false  },
-    settings:     { Admin: 'full', 'Service Advisor': false,  Mechanic: false,  'Parts Manager': false  },
+    settings:     { Admin: 'full', 'Service Advisor': 'full', Mechanic: 'full', 'Parts Manager': 'full' },
     notifications:{ Admin: 'full', 'Service Advisor': 'full', Mechanic: 'full', 'Parts Manager': 'full' },
     staff:        { Admin: 'full', 'Service Advisor': false,  Mechanic: false,  'Parts Manager': false  },
   };

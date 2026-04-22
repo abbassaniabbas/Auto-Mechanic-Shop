@@ -89,39 +89,39 @@
 
         <!-- Settings nav -->
         <div class="settings-nav">
-          <div class="settings-nav-item" id="nav-personal" onclick="showSettingsPane('personal',this)">
+          <div class="settings-nav-item" id="nav-personal" data-settings-pane="personal" onclick="showSettingsPane('personal',this)">
             <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             My Profile
           </div>
-          <div class="settings-nav-item active" onclick="showSettingsPane('shop',this)">
+          <div class="settings-nav-item active" data-admin-only="true" data-settings-pane="shop" onclick="showSettingsPane('shop',this)">
             <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
             Shop Info
           </div>
-          <div class="settings-nav-item" onclick="showSettingsPane('billing',this)">
+          <div class="settings-nav-item" data-admin-only="true" data-settings-pane="billing" onclick="showSettingsPane('billing',this)">
             <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             Billing & Rates
           </div>
-          <div class="settings-nav-item" onclick="showSettingsPane('users',this)">
+          <div class="settings-nav-item" data-admin-only="true" data-settings-pane="users" onclick="showSettingsPane('users',this)">
             <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Users & Roles
           </div>
-          <div class="settings-nav-item" onclick="showSettingsPane('notifications',this)">
+          <div class="settings-nav-item" data-admin-only="true" data-settings-pane="notifications" onclick="showSettingsPane('notifications',this)">
             <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             Notifications
           </div>
-          <div class="settings-nav-item" onclick="showSettingsPane('integrations',this)">
+          <div class="settings-nav-item" data-admin-only="true" data-settings-pane="integrations" onclick="showSettingsPane('integrations',this)">
             <svg viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
             Integrations
           </div>
-          <div class="settings-nav-item" onclick="showSettingsPane('plan',this)">
+          <div class="settings-nav-item" data-admin-only="true" data-settings-pane="plan" onclick="showSettingsPane('plan',this)">
             <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
             Plan & Billing
           </div>
-          <div class="settings-nav-item" onclick="showSettingsPane('security',this)">
+          <div class="settings-nav-item" data-settings-pane="security" onclick="showSettingsPane('security',this)">
             <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Security
           </div>
-          <div class="settings-nav-item" onclick="showSettingsPane('danger',this)">
+          <div class="settings-nav-item" data-admin-only="true" data-settings-pane="danger" onclick="showSettingsPane('danger',this)">
             <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Danger Zone
           </div>
@@ -179,7 +179,7 @@
           </div>
 
           <!-- SHOP INFO -->
-          <div class="settings-pane active" id="sp-shop">
+          <div class="settings-pane active" id="sp-shop" data-admin-only="true">
             <div class="panel">
               <div class="panel-header">
                 <span class="panel-title">SHOP INFORMATION</span>
@@ -239,7 +239,7 @@
           </div>
 
           <!-- BILLING & RATES -->
-          <div class="settings-pane" id="sp-billing">
+          <div class="settings-pane" id="sp-billing" data-admin-only="true">
             <div class="panel">
               <div class="panel-header">
                 <span class="panel-title">BILLING & RATES</span>
@@ -315,7 +315,7 @@
           </div>
 
           <!-- USERS & ROLES -->
-          <div class="settings-pane" id="sp-users">
+          <div class="settings-pane" id="sp-users" data-admin-only="true">
             <div class="panel">
               <div class="panel-header">
                 <span class="panel-title">USERS & ROLES</span>
@@ -344,7 +344,7 @@
           </div>
 
           <!-- NOTIFICATIONS -->
-          <div class="settings-pane" id="sp-notifications">
+          <div class="settings-pane" id="sp-notifications" data-admin-only="true">
             <div class="panel">
               <div class="panel-header">
                 <span class="panel-title">NOTIFICATION PREFERENCES</span>
@@ -372,7 +372,7 @@
           </div>
 
           <!-- INTEGRATIONS -->
-          <div class="settings-pane" id="sp-integrations">
+          <div class="settings-pane" id="sp-integrations" data-admin-only="true">
 
             <!-- ── ONLINE BOOKING LINK ── -->
             <div class="panel" style="margin-bottom:16px">
@@ -442,7 +442,7 @@
           </div>
 
           <!-- PLAN & BILLING — live from Paystack -->
-          <div class="settings-pane" id="sp-plan">
+          <div class="settings-pane" id="sp-plan" data-admin-only="true">
 
             <!-- ── CURRENT PLAN STATUS ── -->
             <div class="panel" style="margin-bottom:16px">
@@ -623,7 +623,7 @@
           </div>
 
           <!-- DANGER ZONE -->
-          <div class="settings-pane" id="sp-danger">
+          <div class="settings-pane" id="sp-danger" data-admin-only="true">
             <div class="danger-zone">
               <div class="danger-zone-title">⚠ DANGER ZONE</div>
               <div class="danger-zone-sub">These actions are irreversible. Please read carefully before proceeding.</div>
@@ -716,6 +716,8 @@
 <script src="../js/billing.js"></script>
 <script>
 let _currentShop = null;
+let _settingsUserRole = null;
+const STAFF_SETTINGS_PANES = new Set(['personal', 'security']);
 
 function val(id) {
   const el = document.getElementById(id);
@@ -727,6 +729,11 @@ function setVal(id, v) {
 }
 
 function showSettingsPane(pane, el) {
+  if (_settingsUserRole !== 'Admin' && !STAFF_SETTINGS_PANES.has(pane)) {
+    pane = 'personal';
+    el = document.querySelector('.settings-nav-item[data-settings-pane="personal"]');
+  }
+
   document.querySelectorAll('.settings-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('sp-' + pane)?.classList.add('active');
@@ -741,6 +748,7 @@ async function initPage() {
 }
 
 async function loadSettings(user) {
+  _settingsUserRole = user?.role || null;
   RBAC.clearCache();
   _currentShop = await RBAC.getShop();
 
@@ -770,20 +778,16 @@ async function loadSettings(user) {
 
   renderProfileAvatarPreview();
 
-  // Non-admins: default to My Profile pane, disable shop fields
+  // Non-admin staff: only personal settings and security
   if (user?.role !== 'Admin') {
+    document.querySelectorAll('[data-admin-only="true"]').forEach(el => {
+      el.style.display = 'none';
+    });
     document.querySelectorAll('[onclick*="saveShopInfo"],[onclick*="saveBillingSettings"]')
       .forEach(btn => btn.style.display = 'none');
     document.querySelectorAll('#set-shopname,#set-phone,#set-email,#set-addr,#set-labor,#set-tax,#set-invprefix,#set-bays,#set-wd-open,#set-wd-close,#set-sat-open,#set-sat-close')
       .forEach(el => el.disabled = true);
-    // Default to personal pane for non-admins
-    const personalNav = document.getElementById('nav-personal');
-    if (personalNav) {
-      document.querySelectorAll('.settings-pane').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
-      document.getElementById('sp-personal')?.classList.add('active');
-      personalNav.classList.add('active');
-    }
+    showSettingsPane('personal', document.getElementById('nav-personal'));
   }
 
   // Load shop_settings for rates
